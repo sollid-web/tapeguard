@@ -84,6 +84,20 @@ const big = (value, fallback = '0') => {
 };
 const lower = (value) => String(value || '').trim().toLowerCase();
 
+export function constantProductCurveImpact(amountIn, reserveIn, maxImpactBps) {
+  const denominator = reserveIn + amountIn;
+  const numerator = amountIn * 10000n;
+  const impactBps = Number((numerator + denominator - 1n) / denominator);
+  return { impactBps, exceedsLimit: impactBps > maxImpactBps };
+}
+
+export function inputReserveForPath(path, pool) {
+  const token0 = pool.token0.toLowerCase();
+  if (token0 === path[0].toLowerCase()) return pool.reserve0;
+  if (token0 === path[1].toLowerCase()) return pool.reserve1;
+  throw new Error('pool tokens do not match the trade path');
+}
+
 /* --------------------------------------------------------------------- config */
 
 export async function getConfig(db) {
@@ -461,19 +475,19 @@ async function minOutFromPool(env, cfg, amountIn, path, feedOut, outDecimals, po
   }
   let impactBps = 0;
   if (pool && path.length === 2) {
-    const inputIsToken0 = pool.token0.toLowerCase() === path[0].toLowerCase();
-    const reserveIn = inputIsToken0 ? pool.reserve0 : pool.reserve1;
-    const reserveOut = inputIsToken0 ? pool.reserve1 : pool.reserve0;
-    if (reserveIn <= 0n || reserveOut <= 0n) return { error: 'zero-liquidity pool - refusing trade' };
-    const marginalOut = (amountIn * reserveOut) / reserveIn;
-    if (marginalOut <= 0n) return { error: 'trade is too small for reserve precision' };
-    impactBps = onchain < marginalOut ? Number(((marginalOut - onchain) * 10000n) / marginalOut) : 0;
-    if (impactBps > cfg.maxPriceImpactBps) {
-      return { error: `estimated price impact ${impactBps} bps exceeds max ${cfg.maxPriceImpactBps} bps` };
+    const reserveIn = inputReserveForPath(path, pool);
+    if (reserveIn <= 0n) return { error: 'zero-liquidity pool - refusing trade' };
+    const impact = constantProductCurveImpact(amountIn, reserveIn, cfg.maxPriceImpactBps);
+    impactBps = impact.impactBps;
+    if (impact.exceedsLimit) {
+      return { error: `estimated fee-excluded curve price impact ${impactBps} bps exceeds max ${cfg.maxPriceImpactBps} bps` };
     }
   }
   const base = feedOut < onchain ? feedOut : onchain;
-  return { minOut: bps(base, cfg.slippageBps), note: `pool quote ${formatUnits(onchain, outDecimals)}` };
+  return {
+    minOut: bps(base, cfg.slippageBps),
+    note: `pool quote ${formatUnits(onchain, outDecimals)}; fee-excluded curve impact ${impactBps} bps`,
+  };
 }
 
 /* --------------------------------------------------------------- submission */

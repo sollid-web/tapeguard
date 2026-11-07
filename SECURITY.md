@@ -9,7 +9,20 @@ it does not verify production infrastructure, Cloudflare secrets, D1 migrations,
 | ID | Severity | Finding | Status |
 |---|---|---|---|
 | M-01 | Medium | The Worker uses a hot `RELAYER_KEY`; compromise permits policy-approved actions within the on-chain limits. | Residual operational risk. Key separation, least privilege, monitoring, rotation and revocation are documented below. Live secret rotation is not verified by this repository. |
-| M-02 | Medium | `liquidityGuard()` compares a reserve-based marginal output with a router quote, so its shortfall includes pool fees. | Outstanding metric-definition and regression-test issue; do not describe the combined shortfall as pure price impact. |
+
+## Recently resolved
+
+- **M-02 — Price-impact metric included pool fees. Resolved in source.** For exact-input trades
+  through the supported two-token constant-product pool, the daemon computes fee-excluded curve
+  impact as `amountIn / (reserveIn + amountIn)`, relative to the pool's infinitesimal mid-price. It
+  selects `reserveIn` using the input token's position in the trade path. The ratio is dimensionless,
+  so raw token units and decimal scales cancel. The result is converted to basis points and rounded up
+  before comparison with `maxPriceImpactBps` (1–150 bps). This measures trade-size impact from the
+  current reserve snapshot; it does not include pool/router fees and is not a quote, TWAP, or
+  guarantee of realized price. Independently, the daemon checks router output against the feed and
+  uses the lower output, reduced by `slippageBps`, as `amountOutMin`. Tests cover trade direction,
+  decimal scales, trade sizes, and threshold boundaries.
+
 The repo also previously had an off-by-one `eth_getLogs` limit, a tracked Wrangler account cache,
 and stale network/security documentation. Those source-hygiene and documentation issues are
 addressed in this change: the endpoint now enforces a 5,000-block inclusive maximum, `.wrangler/`

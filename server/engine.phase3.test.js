@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { acquireTickLock, releaseTickLock, renewTickLock } from './engine.js';
+import {
+  acquireTickLock,
+  constantProductCurveImpact,
+  inputReserveForPath,
+  releaseTickLock,
+  renewTickLock,
+} from './engine.js';
 
 function lockDb({ changes = 1 } = {}) {
   const calls = [];
@@ -31,4 +37,38 @@ test('a delayed owner cannot release a newer lease', async () => {
 test('renewal fails when the lease token no longer matches', async () => {
   const db = lockDb({ changes: 0 });
   assert.equal(await renewTickLock(db, { token: 'old', expiresAt: 1 }), false);
+});
+
+test('fee-excluded curve impact is directionally and decimal-scale invariant', () => {
+  const stable = '0x0000000000000000000000000000000000000001';
+  const wrapped = '0x0000000000000000000000000000000000000002';
+  const pool = {
+    token0: stable,
+    reserve0: 100_000_000n,
+    reserve1: 100n * 10n ** 18n,
+  };
+  const buyReserve = inputReserveForPath([stable, wrapped], pool);
+  const sellReserve = inputReserveForPath([wrapped, stable], pool);
+  assert.throws(() => inputReserveForPath(['0x0000000000000000000000000000000000000003', wrapped], pool), /do not match/);
+  const buyWithSixDecimalInput = constantProductCurveImpact(1_000_000n, buyReserve, 150);
+  const sellWithEighteenDecimalInput = constantProductCurveImpact(10n ** 18n, sellReserve, 150);
+  assert.equal(buyWithSixDecimalInput.impactBps, 100);
+  assert.equal(sellWithEighteenDecimalInput.impactBps, buyWithSixDecimalInput.impactBps);
+  assert.equal(buyWithSixDecimalInput.exceedsLimit, false);
+});
+
+test('fee-excluded curve impact scales with trade size and enforces the threshold', () => {
+  const smallTrade = constantProductCurveImpact(1_000_000n, 1_000_000_000n, 150);
+  const largeTrade = constantProductCurveImpact(25_000_000n, 100_000_000n, 150);
+  const atLimit = constantProductCurveImpact(1n, 99n, 100);
+  const overLimit = constantProductCurveImpact(1n, 98n, 100);
+
+  assert.equal(smallTrade.impactBps, 10);
+  assert.equal(smallTrade.exceedsLimit, false);
+  assert.equal(largeTrade.impactBps, 2000);
+  assert.equal(largeTrade.exceedsLimit, true);
+  assert.equal(atLimit.impactBps, 100);
+  assert.equal(atLimit.exceedsLimit, false);
+  assert.equal(overLimit.impactBps, 102);
+  assert.equal(overLimit.exceedsLimit, true);
 });

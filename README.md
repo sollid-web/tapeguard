@@ -154,6 +154,17 @@ Also bounded by the daemon side: `maxTradesPerDay`, per-rule cooldown, `minTrade
 a global kill switch (`armed`). Orders carry a deadline (`swapDeadlineS`) and slippage bound
 (`slippageBps`), so a stale decision does not execute at a bad price.
 
+The daemon's `maxPriceImpactBps` guard reports **fee-excluded constant-product curve impact**, not
+total execution shortfall. For an exact-input trade it compares the fee-free constant-product output
+at the trade size with the infinitesimal mid-price output from the same input and current input-side
+reserve: `impact = amountIn / (reserveIn + amountIn)`. The reported basis points are rounded up to
+avoid understating impact near the configured threshold. This is computed in the input token's raw units,
+so token decimals cancel; the reserve is selected according to trade direction. Pool/router fees are
+intentionally excluded from this metric. Separately, `amountOutMin` is based on the lower of the
+router quote and feed-derived output, then reduced by `slippageBps`; the feed/pool deviation guard
+also applies. This is a reserve snapshot estimate for the supported two-token constant-product pool,
+not a guarantee of realized execution price or a TWAP. The guard threshold is 1–150 bps.
+
 ## Rule kinds
 
 | Kind | Fires when | Params |

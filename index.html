@@ -2605,7 +2605,7 @@ window.APP_CONFIG = {
     <div class="card">
       <h3>Architecture</h3>
       <ul class="docs">
-        <li><b>Policy layer — <span class="mono">PolicyCircuit</span></b>: immutable, publicly verifiable rule engine on X Layer. <span class="mono">CIRCUIT_ID</span>, a recomputable <span class="mono">commitment</span>, pause flag, per-action and daily limits, target + selector whitelists, authorised agents. <span class="mono">check()</span> is a pure view, so anyone can dry-run a proposal without spending gas.</li>
+        <li><b>Policy layer — <span class="mono">PolicyCircuit</span></b>: a non-upgradeable rule engine on X Layer whose owner is fixed at deployment, while policy values such as limits, allowlists, and pause state remain owner-configurable. <span class="mono">CIRCUIT_ID</span>, a recomputable <span class="mono">commitment</span>, pause flag, per-action and daily limits, target + selector whitelists, authorised agents. <span class="mono">check()</span> is a pure view, so anyone can dry-run a proposal without spending gas.</li>
         <li><b>Execution layer — <span class="mono">AgentContainer</span></b>: the keyless account owned by your TapeOut circuit container. It holds the funds, calls the circuit, records the spend and only then performs the call — <span class="mono">simulate()</span> is the free preview of exactly that path.</li>
         <li><b>Daemon</b>: an always-on server (Cloudflare Worker, cron trigger or <span class="mono">POST /api/tick</span>). It evaluates the rules — drift rebalancing, price thresholds, intervals — asks the circuit, and submits approved actions as an authorised <b>relayer</b>. The relayer holds no funds and cannot withdraw or reconfigure anything, so nobody has to be around.</li>
       </ul>
@@ -2644,7 +2644,7 @@ window.APP_CONFIG = {
 
 <footer>
   <div><b style="color:var(--txt)">TapeGuardian</b> — an automated crypto agent whose limits are enforced on-chain, so a stolen key cannot drain the account.</div>
-  <div class="small" style="margin-top:6px">Policy circuit · keyless container · always-on daemon · built for X Layer (chain 196)</div>
+  <div class="small" style="margin-top:6px">Policy circuit · keyless container · always-on daemon · built for X Layer testnet (chain 1952)</div>
   <div class="small" style="margin-top:6px">Automated trading can lose money. Limits cap the loss, they do not remove it.</div>
 </footer>
 

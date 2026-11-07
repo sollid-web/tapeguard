@@ -1,43 +1,32 @@
- New issues discovered during the recheck
-These are important because the remediation introduced improvements but did not close every underlying risk.
-Finding A — ERC-20 allowance bypass
-File: contracts/AgentContainer.sol
-_tokenOutflow() recognizes sensitive ERC-20 calls only when calldata has an exact length:
-approve: 68 bytes.
-transfer: 68 bytes.
-transferFrom: 100 bytes.
-The problem is that standard Solidity ERC-20 function dispatch generally accepts valid ABI arguments followed by additional trailing calldata.
-An attacker controlling the keeper could append extra bytes to an otherwise valid approval call. The token outflow parser could then return zero, skipping checkToken(), while the token contract may still execute the approval.
-Because the router is registered, this could undermine the per-token spending limits.
-Required fix: Either reject noncanonical calldata for sensitive selectors or decode the required arguments without relying on exact total calldata length. Add malicious trailing-data tests using a real mock ERC-20 implementation.
+# Historical audit findings and current disposition
 
-Highest priority.
-Fix trailing-calldata token-limit bypass.
-Fix successful trade ID persistence.
-Correct buy-side liquidity calculations.
-Implement genuine price-impact measurement.
-Correct nonce failure handling and transaction dependencies.
-Add regression tests for each issue before proceeding.
-Phase 2 — Restore policy and RPC correctness
-Fix commitment calculation.
-Make simulation enforce the action limit.
-Close unbounded eth_getLogs requests.
-Strengthen lock renewal and concurrency handling.
-Phase 3 — Make verification reproducible
-Commit a complete Foundry workspace and dependencies.
-Add contract tests for all identified bypasses.
-Add integration tests for multi-step trades and D1 accounting.
-Add GitHub Actions for Node and Foundry.
-Require checks before merging into main.
-Phase 4 — Deployment and operational assurance
-Deploy the corrected contracts to X Layer testnet.
-Verify policy configuration and router authorization.
-Apply and verify the D1 schema migration.
-Deploy the corrected Worker.
-Run small-value end-to-end tests in both buy and sell directions.
-Verify failed, reverted, and interrupted transaction recovery.
-Only then consider a controlled mainnet rollout.
+Review snapshot: 7 November 2026
+Repository: `sollid-web/tapeguard`
 
-Deployment caveat
-The Solidity changes require deploying the updated PolicyCircuit and AgentContainer, then configuring the new policy and router permissions. The D1 trade_id column also needs verified migration on the actual production database. A source-level fix alone does not protect the deployed system.
-	
+This file preserves the earlier recheck notes for context. It is not a current, independently verified
+defect backlog. Use [`SECURITY.md`](SECURITY.md) for the current source-review status and
+[`remaining_bug.txt`](remaining_bug.txt) for the existing engineering roadmap. None of the source
+findings below establishes that a fix has been deployed.
+
+## Historical findings
+
+- **ERC-20 trailing calldata:** the current container rejects noncanonical calldata for sensitive
+  ERC-20 selectors. Foundry regression tests cover canonical, truncated, and appended calldata for all
+  four sensitive selectors through both execution paths.
+- **Logical trade IDs, transaction sequencing, nonce recovery, policy commitment and simulation
+  limits:** subsequent source changes address these areas. Re-run the checked-in suites before
+  relying on them; repository state does not establish production D1 or chain state.
+- **RPC log bounds and tick-lock renewal:** source protections and tests exist. The inclusive maximum
+  is 5,000 blocks; exact-boundary regression tests are maintained with the Worker tests.
+- **Price impact:** the current reserve-marginal-versus-router-quote calculation includes pool fees.
+  The metric needs to be separated from fees or described as execution shortfall, with buy/sell and
+  decimal coverage. Treat this as outstanding until that work and its tests are complete.
+- **Foundry workspace and reproducible verification:** the repository contains a vendored workspace,
+  deployment script, and tests. Local test results must be recorded from the current checkout; no
+  deployment or production verification is implied.
+
+## Deployment boundary
+
+Contract redeployment, policy/router configuration, production D1 migration, Worker deployment, and
+end-to-end transactions remain separate operational steps. A source change alone does not protect
+the deployed system.

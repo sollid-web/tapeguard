@@ -246,7 +246,7 @@ async function handle(request, env, ctx) {
           const from = parseBlock(filter.fromBlock);
           const to = parseBlock(filter.toBlock);
           if (from === null || to === null) return bad('eth_getLogs requires canonical hex block numbers, not symbolic tags');
-          if (to < from || to - from > 5000n) return bad('eth_getLogs is limited to a 5000 block range', 400);
+          if (to < from || to - from + 1n > 5000n) return bad('eth_getLogs is limited to 5000 inclusive blocks', 400);
         }
       }
       clean.push({ jsonrpc: '2.0', id: call.id ?? 1, method: call.method, params });

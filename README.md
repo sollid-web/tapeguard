@@ -16,11 +16,18 @@ forge build
 forge test -vvv
 ```
 
-The copied workspace currently passes 14 Foundry tests. The configured X Layer testnet RPC reports
-chain ID 1952 (`0x7a0`). Contract redeployment is authorized but has not completed in this environment
+The copied workspace currently passes 16 Foundry tests. The configured X Layer testnet RPC reports
+chain ID 1952 (`0x7a0`). X Layer mainnet uses chain ID 196. The Foundry sample targets testnet;
+the Worker and dashboard fallback chain ID is 196, so explicitly configure 1952 when testing against
+testnet. Contract redeployment is authorized but has not completed in this environment
 because the deployment command requires explicit production-deploy permission. Existing deployed
 addresses must not be treated as addresses for the newly verified bytecode until deployment receipts
 and on-chain bytecode checks are recorded here.
+
+The sibling workspace at `../tapeguardian-foundry` is the deployment/archive mirror for the Foundry
+contract artifacts and receipts. Treat `foundry/` as the active source-of-truth workspace for the
+checked-in code, and the external mirror only as a historical or deployment record when a receipt is
+being verified.
 
 The frontend ABI artifacts in [`abi/`](abi/) are generated from the copied Foundry build and embedded
 in `index.html`. They are source artifacts only until the corresponding contracts are redeployed and
@@ -51,7 +58,7 @@ To trade automatically, a bot normally needs access to your private key. That ke
 
 🛡️ Our Solution
 
-TapeGuardian separates execution power from funding custody. Instead of trusting an all-powerful key, your rules are hardcoded into an immutable Policy Circuit on the blockchain.
+TapeGuardian separates execution power from funding custody. Instead of trusting an all-powerful key, your rules are enforced by the Policy Circuit on the blockchain. The contract owner is fixed at deployment, but the policy settings remain owner-configurable and are not immutable.
 The background automation runs using a low-power "Keeper" key that acts like a delivery courier. It can only push transactions that your rulebook explicitly allows. If an attacker compromises your server and steals the keeper key, they still cannot spend past your daily limit, swap for unapproved tokens, or interact with un-whitelisted decentralized exchanges. Your funds stay safe inside a keyless smart contract vault.
 
 🏗️ Core Architecture & How It Works
@@ -71,13 +78,13 @@ The background automation runs using a low-power "Keeper" key that acts like a d
                                                     │ Executes
                                                     ▼
                                            [Whitelisted DEX Swap]
-1. Policy Layer (PolicyCircuit): An immutable, publicly verifiable rule engine deployed on X Layer. It dictates the maximum allowed size per transaction, a rolling 24-hour volume cap, whitelist expiration, and authorized target/selector addresses (e.g., specific DEX routers). It features a pure check() view function allowing cost-free transaction dry-runs.
+1. Policy Layer (PolicyCircuit): A non-upgradeable smart-contract rule engine deployed on X Layer. Its owner is fixed at deployment, but policy data such as limits, allowlists, and pause state remain owner-configurable. It dictates the maximum allowed size per transaction, a rolling 24-hour volume cap, whitelist expiration, and authorized target/selector addresses (e.g., specific DEX routers). It features a pure check() view function allowing cost-free transaction dry-runs.
 2. Execution Layer (AgentContainer): A keyless smart contract account that holds your assets. It contains no private key. It handles requests by calling the Policy Circuit inside the transaction window, ensuring the rule check and the trade succeed or fail together.
 3. The Autonomous Daemon: An always-on Cloudflare Worker triggered by a minute-by-minute cron job. It continuously monitors market conditions (e.g., OKB/USD price drift) and builds execution proposals to feed to the container using its low-power keeper key.
 
 🛠️ X Layer Integration & Tech Stack
 
-• Blockchain Network: Deployed entirely on X Layer Mainnet / Testnet (Chain ID 196).
+• Blockchain Network: X Layer mainnet is chain ID 196; X Layer testnet is chain ID 1952 (`0x7a0`). The Foundry sample targets testnet. The Worker and dashboard fallback is mainnet, so set the chain ID explicitly when using testnet; no deployment is implied by these configuration values.
 • Smart Contracts: Formulated in Solidity using robust, security-first access control boundaries to prevent unauthorized parameter overrides.
 • Off-Chain Automation: Built using Cloudflare Workers for high-availability, low-latency background cron execution and edge-routed state management.
 • Front-End & Tools: A highly responsive dashboard featuring a comprehensive Policy Simulator, live activity/decision logs, single-click JSON evidence exporting, and an integrated deployment control plane featuring an on-chain kill switch.
@@ -92,7 +99,7 @@ The background automation runs using a low-power "Keeper" key that acts like a d
 
 | Layer | What it is | Where it lives |
 |---|---|---|
-| **Policy circuit** | Immutable rule engine: per-action limit, daily volume cap, target + function allowlist, pause flag. | `contracts/PolicyCircuit.sol` — a TapeOut circuit, on X Layer |
+| **Policy circuit** | Non-upgradeable owner-controlled rule engine: per-action limit, daily volume cap, target + function allowlist, pause flag. | `contracts/PolicyCircuit.sol` — a TapeOut circuit, on X Layer |
 | **Container** | The agent's account. Holds the funds, is the address that executes, has no private key. | `contracts/AgentContainer.sol` — bound to the user's TapeOut circuit container |
 | **Daemon** | Always-on process that watches triggers, asks the circuit, and submits the approved transaction. | `server/` — a Cloudflare Worker with D1, cron-driven |
 
@@ -190,6 +197,20 @@ calldata — it just cannot submit. Nothing is lost: the next cycle re-validates
 the circuit on chain and sends it as soon as a keeper is configured (or the kill switch is released),
 and a row older than `maxQueueAgeS` expires instead of being sent at a stale price.
 
+### Keeper key rotation and incident response
+
+The keeper is a hot key and remains an operational trust risk even though it cannot bypass on-chain
+policy. Keep it separate from owner keys, fund it only with gas, restrict access to Worker secrets,
+and monitor container activity. For planned rotation, generate a replacement keeper key in a secure
+environment, authorize its address with the owner-controlled `AgentContainer.setRelayer(newAddress,
+true)`, update the Worker `RELAYER_KEY` secret through Cloudflare's secret-management interface, verify
+the Worker reports the new relayer as authorized and can submit a harmless policy-approved action,
+then revoke the old address with `setRelayer(oldAddress, false)`. For suspected compromise, pause the
+agent and revoke the old address immediately; rotate the Worker secret, authorize the replacement,
+verify the new setup, and only then unpause. Never put either private key in source control, `.env`
+files, logs, or this runbook. On-chain revocation is covered by a Foundry regression test; this
+repository cannot verify or perform a live Cloudflare secret rotation.
+
 ## API (all CORS-enabled, JSON)
 
 | Endpoint | Auth | Purpose |
@@ -204,7 +225,7 @@ and a row older than `maxQueueAgeS` expires instead of being sent at a stale pri
 | `POST /api/arm` | owner | kill switch |
 | `POST /api/oracle` | owner | manual price |
 | `GET /api/evidence` | — | full JSON bundle for judges |
-| `POST /api/rpc` | — (read-only) | JSON-RPC proxy for page reads without a wallet: allow-listed read methods only, ≤20 calls per batch, `eth_getLogs` limited to 10 000 blocks. Writes never pass. |
+| `POST /api/rpc` | — (read-only) | JSON-RPC proxy for page reads without a wallet: allow-listed read methods only, ≤20 calls per batch, `eth_getLogs` limited to 5,000 inclusive blocks. Writes never pass. |
 
 Session tokens are random 32 bytes; only their SHA-256 is stored. Login is rate limited per IP, the
 session lives 8 hours, and the page keeps it in `sessionStorage` so it dies with the tab. Browser

@@ -42,6 +42,19 @@ contract MockTokenPhase3 {
         allowance[msg.sender][spender] = amount;
         return true;
     }
+
+    function increaseAllowance(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] += amount;
+        return true;
+    }
+
+    function transfer(address, uint256) external pure returns (bool) {
+        return true;
+    }
+
+    function transferFrom(address, address, uint256) external pure returns (bool) {
+        return true;
+    }
 }
 
 contract AgentContainerPhase3Test is Test {
@@ -87,6 +100,18 @@ contract AgentContainerPhase3Test is Test {
         agent.setPolicy(address(policy));
     }
 
+    function testRevokedRelayerCannotExecute() public {
+        address relayer = address(0x1234);
+        vm.prank(owner);
+        agent.setRelayer(relayer, true);
+        vm.prank(owner);
+        agent.setRelayer(relayer, false);
+
+        vm.prank(relayer);
+        vm.expectRevert(AgentContainer.NotAuthorised.selector);
+        agent.execute(address(token), 0, bytes(""));
+    }
+
     function testApprovalRequiresRegisteredRouterAndSupportsZeroReset() public {
         bytes memory approval = abi.encodeWithSignature("approve(address,uint256)", router, 7);
         vm.prank(owner);
@@ -104,17 +129,48 @@ contract AgentContainerPhase3Test is Test {
         assertEq(token.allowance(address(agent), router), 0);
     }
 
-    function testTrailingTokenCalldataCannotBypassTokenLimit() public {
-        policy.setTokenApproved(false);
-        bytes memory canonical = abi.encodeWithSignature("approve(address,uint256)", router, 7);
-        bytes memory padded = bytes.concat(canonical, hex"deadbeef");
+    function testSensitiveTokenSelectorsRejectTruncatedAndTrailingCalldata() public {
+        bytes[] memory calls = new bytes[](4);
+        calls[0] = abi.encodeWithSignature("approve(address,uint256)", router, 7);
+        calls[1] = abi.encodeWithSignature("increaseAllowance(address,uint256)", router, 7);
+        calls[2] = abi.encodeWithSignature("transfer(address,uint256)", recipient, 7);
+        calls[3] = abi.encodeWithSignature("transferFrom(address,address,uint256)", owner, recipient, 7);
+
+        for (uint256 i; i < calls.length; ++i) {
+            bytes memory padded = bytes.concat(calls[i], hex"deadbeef");
+            bytes memory truncated = new bytes(calls[i].length - 1);
+            for (uint256 j; j < truncated.length; ++j) {
+                truncated[j] = calls[i][j];
+            }
+            _assertMalformedTokenCall(padded);
+            _assertMalformedTokenCall(truncated);
+        }
+    }
+
+    function testCanonicalSensitiveTokenCallsRemainAccepted() public {
+        policy.setRouter(router, true);
+        bytes[] memory calls = new bytes[](4);
+        calls[0] = abi.encodeWithSignature("approve(address,uint256)", router, 7);
+        calls[1] = abi.encodeWithSignature("increaseAllowance(address,uint256)", router, 7);
+        calls[2] = abi.encodeWithSignature("transfer(address,uint256)", recipient, 7);
+        calls[3] = abi.encodeWithSignature("transferFrom(address,address,uint256)", owner, recipient, 7);
+
+        for (uint256 i; i < calls.length; ++i) {
+            vm.prank(owner);
+            agent.execute(address(token), 0, calls[i]);
+            (bool approved,) = agent.simulate(address(token), 0, calls[i]);
+            assertTrue(approved);
+        }
+    }
+
+    function _assertMalformedTokenCall(bytes memory data) private {
         vm.prank(owner);
         vm.expectRevert(AgentContainer.NonCanonicalTokenCalldata.selector);
-        agent.execute(address(token), 0, padded);
+        agent.execute(address(token), 0, data);
 
         vm.prank(owner);
         vm.expectRevert(AgentContainer.NonCanonicalTokenCalldata.selector);
-        agent.simulate(address(token), 0, padded);
+        agent.simulate(address(token), 0, data);
     }
 
     function testCanonicalTokenCallStillReachesTokenPolicy() public {

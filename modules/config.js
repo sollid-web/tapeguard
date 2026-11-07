@@ -23,7 +23,7 @@ var API = (CFG && CFG.api) ? String(CFG.api).replace(/\/+$/,'') : null;
 var CHAIN_ID = (CFG && CFG.chainId) ? Number(CFG.chainId) : 196;
 var CHAINS = {
   196: {name:'X Layer Mainnet', sym:'OKB', scan:'https://www.oklink.com/xlayer'},
-  195: {name:'X Layer Testnet', sym:'OKB', scan:'https://www.oklink.com/xlayer-test'}
+  1952: {name:'X Layer Testnet', sym:'OKB', scan:'https://www.oklink.com/xlayer-test'}
 };
 var CHAIN = CHAINS[CHAIN_ID] || {name:'Chain '+CHAIN_ID, sym:'OKB', scan:''};
 export { CFG, CONFIG_WARNINGS, CONTRACTS, CONTRACT_NAMES, LIVE, API, CHAIN_ID, CHAINS, CHAIN };

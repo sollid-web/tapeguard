@@ -15,6 +15,8 @@ interface IPolicyCircuit {
 
     function recordExecution(uint256 agentNonce, uint256 value, address token, uint256 tokenAmount)
         external;
+
+    function authorizedRouters(address router) external view returns (bool);
 }
 
 /// @title AgentContainer
@@ -45,6 +47,7 @@ contract AgentContainer {
     error InsufficientBalance();
     error Reentrancy();
     error TransferFailed();
+    error RouterNotAuthorised();
 
     // ----------------------------------------------------------------- events
     event Funded(address indexed from, uint256 amount);
@@ -158,6 +161,10 @@ contract AgentContainer {
         if (value > 0 && value > _available()) revert InsufficientBalance();
 
         (address token, uint256 tokenAmount) = _tokenOutflow(target, data);
+        if (_isApproval(data)) {
+            address router = address(uint160(_word(data, 4)));
+            if (!IPolicyCircuit(policyContract).authorizedRouters(router)) revert RouterNotAuthorised();
+        }
         if (tokenAmount > 0) {
             (bool tokenOk, string memory tokenReason) =
                 IPolicyCircuit(policyContract).checkToken(address(this), token, tokenAmount);
@@ -197,6 +204,10 @@ contract AgentContainer {
         if (policyContract == address(0)) return (false, "POLICY_NOT_SET");
 
         (address token, uint256 tokenAmount) = _tokenOutflow(target, data);
+        if (_isApproval(data)) {
+            address router = address(uint160(_word(data, 4)));
+            if (!IPolicyCircuit(policyContract).authorizedRouters(router)) return (false, "ROUTER_NOT_AUTHORISED");
+        }
         if (tokenAmount > 0) {
             (bool tokenOk, string memory tokenReason) =
                 IPolicyCircuit(policyContract).checkToken(address(this), token, tokenAmount);
@@ -334,6 +345,12 @@ contract AgentContainer {
     function _send(address to, uint256 amount) private {
         (bool ok,) = to.call{value: amount}("");
         if (!ok) revert TransferFailed();
+    }
+
+    function _isApproval(bytes calldata data) private pure returns (bool) {
+        if (data.length < 36) return false;
+        bytes4 sel = _selector(data);
+        return sel == SEL_APPROVE || sel == SEL_INCREASE_ALLOWANCE;
     }
 
     /// @dev Detects an ERC-20 outflow hidden in the calldata: the token is the call

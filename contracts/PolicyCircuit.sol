@@ -23,13 +23,16 @@ contract PolicyCircuit {
     error AgentNotAuthorised();
     error NonceMismatch();
     error SpendAboveLimit();
+    error ActionsAboveLimit();
 
     // ----------------------------------------------------------------- events
     event CircuitLinked(bytes32 indexed circuitId, string version);
     event CommitmentUpdated(bytes32 indexed commitment, uint256 revision, bytes32 whitelistHash, bytes32 tokenHash);
     event LimitsSet(uint256 maxPerAction, uint256 dailyLimit);
+    event MaxActionsPerDaySet(uint256 maxActionsPerDay);
     event PausedSet(bool paused);
     event TargetSet(address indexed target, bool allowed, bool anyFunction);
+    event RouterSet(address indexed router, bool allowed);
     event FunctionSet(address indexed target, bytes4 indexed selector, bool allowed);
     event PlainTransferSet(address indexed target, bool allowed);
     event AgentSet(address indexed agent, bool authorised);
@@ -54,6 +57,9 @@ contract PolicyCircuit {
     bool public paused;
     uint256 public maxPerAction;
     uint256 public dailyLimit;
+    uint256 public maxActionsPerDay;
+    mapping(address => uint256) public actionDay;
+    mapping(address => uint256) public actionsToday;
 
     /// Revision of the configuration, bumped on every parameter change.
     uint256 public revision;
@@ -65,6 +71,7 @@ contract PolicyCircuit {
     bytes32 public tokenHash;
 
     mapping(address => bool) public allowedTargets;
+    mapping(address => bool) public authorizedRouters;
     /// target => every function of that target is allowed
     mapping(address => bool) public anyFunction;
     /// target => selector => allowed
@@ -106,6 +113,7 @@ contract PolicyCircuit {
         // Tokens stay closed until the owner whitelists one with setTokenLimit.
         maxPerAction = 0.05 ether;
         dailyLimit = 0.25 ether;
+        maxActionsPerDay = 6;
         paused = false;
 
         whitelistHash = keccak256("tapeout.policy.whitelist.v1");
@@ -190,6 +198,12 @@ contract PolicyCircuit {
         }
         spentToday[msg.sender] += value;
         if (spentToday[msg.sender] > dailyLimit) revert SpendAboveLimit();
+        if (actionDay[msg.sender] != today) {
+            actionDay[msg.sender] = today;
+            actionsToday[msg.sender] = 0;
+        }
+        actionsToday[msg.sender] += 1;
+        if (actionsToday[msg.sender] > maxActionsPerDay) revert ActionsAboveLimit();
         emit SpendRecorded(msg.sender, value, spentToday[msg.sender]);
 
         if (token != address(0) && tokenAmount > 0) {
@@ -255,6 +269,7 @@ contract PolicyCircuit {
                     paused,
                     maxPerAction,
                     dailyLimit,
+                    maxActionsPerDay,
                     whitelistHash,
                     tokenHash
                 )
@@ -271,6 +286,13 @@ contract PolicyCircuit {
     }
 
     // ------------------------------------------------------- owner-only setup
+    function setMaxActionsPerDay(uint256 maxActionsPerDay_) external onlyOwner {
+        if (maxActionsPerDay_ == 0) revert InvalidLimits();
+        maxActionsPerDay = maxActionsPerDay_;
+        _bumpCommitment();
+        emit MaxActionsPerDaySet(maxActionsPerDay_);
+    }
+
     function setPaused(bool paused_) external onlyOwner {
         paused = paused_;
         _bumpCommitment();
@@ -285,10 +307,14 @@ contract PolicyCircuit {
         emit LimitsSet(maxPerAction_, dailyLimit_);
     }
 
-    /// @param anyFn when true every function of the target is allowed, otherwise each
-    ///        selector has to be whitelisted through {setFunction}. Leaving this true
-    ///        gives the keeper an unbounded selector space on that target - prefer
-    ///        selector-by-selector whitelisting.
+    function setRouter(address router, bool allowed) external onlyOwner {
+        if (router == address(0)) revert ZeroAddress();
+        authorizedRouters[router] = allowed;
+        whitelistHash = keccak256(abi.encode(whitelistHash, uint8(5), router, allowed));
+        _bumpCommitment();
+        emit RouterSet(router, allowed);
+    }
+
     function setTarget(address target, bool allowed, bool anyFn) external onlyOwner {
         if (target == address(0)) revert ZeroAddress();
         allowedTargets[target] = allowed;

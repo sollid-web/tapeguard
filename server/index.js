@@ -207,8 +207,13 @@ async function handle(request, env, ctx) {
   if (path === '/api/rpc' && method === 'POST') {
     if (!env.RPC_URL) return bad('no RPC_URL configured on the server', 503);
 
+    const contentLength = Number(request.headers.get('Content-Length') || 0);
+    if (contentLength > 256 * 1024) return bad('JSON-RPC body exceeds 256 KiB', 413);
+    let rawBody;
+    try { rawBody = await request.text(); } catch { return bad('expected a JSON-RPC body'); }
+    if (new TextEncoder().encode(rawBody).byteLength > 256 * 1024) return bad('JSON-RPC body exceeds 256 KiB', 413);
     let payload;
-    try { payload = await request.json(); } catch { return bad('expected a JSON-RPC body'); }
+    try { payload = JSON.parse(rawBody); } catch { return bad('expected a JSON-RPC body'); }
     const isBatch = Array.isArray(payload);
     const calls = isBatch ? payload : [payload];
     if (!calls.length) return bad('empty JSON-RPC request');
@@ -223,17 +228,24 @@ async function handle(request, env, ctx) {
 
     const clean = [];
     for (const call of calls) {
-      if (!call || typeof call !== 'object' || typeof call.method !== 'string') return bad('malformed JSON-RPC call');
+      if (!call || typeof call !== 'object' || Array.isArray(call) || call.jsonrpc !== '2.0' || typeof call.method !== 'string') return bad('malformed JSON-RPC call');
       if (!ALLOWED.has(call.method)) return bad('method not allowed: ' + call.method, 403);
       const params = Array.isArray(call.params) ? call.params : [];
       if (call.method === 'eth_getLogs') {
         const filter = params[0] || {};
-        const from = Number(filter.fromBlock);
-        const to = Number(filter.toBlock);
-        if (filter.fromBlock !== undefined && filter.toBlock !== undefined
-            && Number.isFinite(from) && Number.isFinite(to) && to - from > 10000) {
-          return bad('eth_getLogs is limited to a 10000 block range', 400);
-        }
+        if (typeof filter !== 'object' || Array.isArray(filter)) return bad('eth_getLogs filter must be an object');
+        if (filter.blockHash !== undefined && (typeof filter.blockHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(filter.blockHash))) return bad('invalid blockHash');
+        const parseBlock = (value) => {
+          if (value === undefined) return null;
+          if (value === 'latest' || value === 'earliest' || value === 'pending') return value;
+          if (typeof value !== 'string' || !/^0x[0-9a-fA-F]+$/.test(value)) return null;
+          return Number(BigInt(value));
+        };
+        const from = parseBlock(filter.fromBlock);
+        const to = parseBlock(filter.toBlock);
+        if (filter.fromBlock !== undefined && from === null || filter.toBlock !== undefined && to === null) return bad('fromBlock/toBlock must be supported block tags or hex quantities');
+        if (typeof from === 'number' && typeof to === 'number' && (to < from || to - from > 5000)) return bad('eth_getLogs is limited to a 5000 block range', 400);
+        if (filter.blockHash !== undefined && (filter.fromBlock !== undefined || filter.toBlock !== undefined)) return bad('blockHash cannot be combined with block range');
       }
       clean.push({ jsonrpc: '2.0', id: call.id ?? 1, method: call.method, params });
     }
@@ -242,9 +254,11 @@ async function handle(request, env, ctx) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(isBatch ? clean : clean[0]),
+      signal: AbortSignal.timeout(10000),
     });
     if (!upstream.ok) return bad('rpc upstream error ' + upstream.status, 502);
     const text = await upstream.text();
+    if (new TextEncoder().encode(text).byteLength > 2 * 1024 * 1024) return bad('rpc upstream response exceeds 2 MiB', 502);
     return new Response(text, { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors.headers } });
   }
 
@@ -330,7 +344,7 @@ async function handle(request, env, ctx) {
       if (!body || typeof body !== 'object') return bad('expected a JSON object');
       const patch = {};
 
-      for (const key of ['container', 'policy', 'usdt', 'router', 'wrappedNative']) {
+      for (const key of ['container', 'policy', 'usdt', 'router', 'factory', 'wrappedNative']) {
         if (body[key] !== undefined) {
           const value = String(body[key] || '').trim().toLowerCase();
           if (value && !isAddress(value)) return bad(`${key} is not a valid address`);
@@ -348,6 +362,8 @@ async function handle(request, env, ctx) {
       if (body.swapDeadlineS !== undefined) patch.swapDeadlineS = String(clampInt(body.swapDeadlineS, 60, 3600, 900));
       if (body.maxQueueAgeS !== undefined) patch.maxQueueAgeS = String(clampInt(body.maxQueueAgeS, 60, 86400, 900));
       if (body.maxFeedDeviationBps !== undefined) patch.maxFeedDeviationBps = String(clampInt(body.maxFeedDeviationBps, 0, 5000, 500));
+      if (body.minLiquidityUsd !== undefined) patch.minLiquidityUsd = String(Math.max(10000, Number(body.minLiquidityUsd) || 10000));
+      if (body.maxPriceImpactBps !== undefined) patch.maxPriceImpactBps = String(clampInt(body.maxPriceImpactBps, 1, 150, 150));
       if (body.requireQuote !== undefined) patch.requireQuote = body.requireQuote ? '1' : '0';
       if (body.minTradeWei !== undefined) {
         try { patch.minTradeWei = BigInt(String(body.minTradeWei)).toString(); } catch { return bad('minTradeWei must be an integer string in wei'); }

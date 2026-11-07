@@ -17,6 +17,17 @@ import { addressFromPrivateKey, isPrivateKey, selfTest as signerSelfTest, signTr
 const DAY = 86400;
 const LOCK_TTL = 25;
 
+function leaseToken () {
+  return typeof crypto?.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+async function ensureTradeColumn (db) {
+  try { await db.prepare("ALTER TABLE queue ADD COLUMN trade_id TEXT NOT NULL DEFAULT ''").run(); } catch { /* already migrated */ }
+  try { await db.prepare('CREATE INDEX IF NOT EXISTS queue_trade ON queue (trade_id, ts DESC)').run(); } catch { /* already present */ }
+}
+
 /**
  * Fingerprint of an approved action. Captured when the circuit says yes, re-derived
  * immediately before signing: the keeper can therefore never broadcast calldata that
@@ -46,6 +57,7 @@ export const DEFAULTS = {
   usdt: '',
   usdtDecimals: '6',
   router: '',
+  factory: '',
   wrappedNative: '',
   pathSell: '[]',
   pathBuy: '[]',
@@ -54,6 +66,8 @@ export const DEFAULTS = {
   maxQueueAgeS: '900',
   requireQuote: '1',
   maxFeedDeviationBps: '500',
+  minLiquidityUsd: '10000',
+  maxPriceImpactBps: '150',
 };
 
 const num = (value, fallback = 0) => {
@@ -94,6 +108,7 @@ export function typed(raw) {
     usdt: lower(raw.usdt),
     usdtDecimals: num(raw.usdtDecimals, 6),
     router: lower(raw.router),
+    factory: lower(raw.factory),
     wrappedNative: lower(raw.wrappedNative),
     pathSell: safeArray(raw.pathSell).map(lower),
     pathBuy: safeArray(raw.pathBuy).map(lower),
@@ -102,6 +117,8 @@ export function typed(raw) {
     maxQueueAgeS: Math.max(60, num(raw.maxQueueAgeS, 900)),
     requireQuote: String(raw.requireQuote) !== '0',
     maxFeedDeviationBps: Math.min(5000, Math.max(0, num(raw.maxFeedDeviationBps, 500))),
+    minLiquidityUsd: Math.max(10000, num(raw.minLiquidityUsd, 10000)),
+    maxPriceImpactBps: Math.min(150, Math.max(1, num(raw.maxPriceImpactBps, 150))),
   };
 }
 
@@ -145,26 +162,42 @@ export async function recentLog(db, limit = 40) {
 
 /* --------------------------------------------------------------------- store */
 
-async function lock(db) {
+export async function acquireTickLock(db) {
   const ts = Math.floor(Date.now() / 1000);
+  const token = leaseToken();
+  const value = JSON.stringify({ token, expiresAt: ts + LOCK_TTL });
   const result = await db
     .prepare(
       `INSERT INTO state (key, value, ts) VALUES ('tick_lock', ?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value, ts = excluded.ts WHERE state.ts < ?`,
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, ts = excluded.ts
+       WHERE state.ts < ?`,
     )
-    .bind(String(ts), ts, ts - LOCK_TTL)
+    .bind(value, ts, ts - LOCK_TTL)
     .run();
-  return (result.meta?.changes ?? 0) === 1;
+  return (result.meta?.changes ?? 0) === 1 ? { token, expiresAt: ts + LOCK_TTL } : null;
 }
 
-async function unlock(db) {
-  await db.prepare("UPDATE state SET ts = 0 WHERE key = 'tick_lock'").run();
+export async function renewTickLock(db, lease) {
+  if (!lease) return false;
+  const ts = Math.floor(Date.now() / 1000);
+  const next = { token: lease.token, expiresAt: ts + LOCK_TTL };
+  const result = await db.prepare("UPDATE state SET value = ?, ts = ? WHERE key = 'tick_lock' AND value = ?")
+    .bind(JSON.stringify(next), ts, JSON.stringify(lease)).run();
+  if ((result.meta?.changes ?? 0) !== 1) return false;
+  lease.expiresAt = next.expiresAt;
+  return true;
+}
+
+export async function releaseTickLock(db, lease) {
+  if (!lease) return;
+  await db.prepare("UPDATE state SET value = '', ts = 0 WHERE key = 'tick_lock' AND value = ?")
+    .bind(JSON.stringify(lease)).run();
 }
 
 async function tradesLastDay(db) {
   const since = Math.floor(Date.now() / 1000) - DAY;
   const row = await db
-    .prepare("SELECT COUNT(*) AS n FROM queue WHERE ts >= ? AND status IN ('sent', 'pending')")
+    .prepare("SELECT COUNT(DISTINCT trade_id) AS n FROM queue WHERE ts >= ? AND trade_id <> '' AND status IN ('sent', 'pending', 'confirmed')")
     .bind(since)
     .first();
   return Number(row?.n || 0);
@@ -173,6 +206,14 @@ async function tradesLastDay(db) {
 /** Queued actions the daemon will not send within `maxQueueAgeS` are dead weight:
  *  the price they were sized against has moved, so they are marked expired instead
  *  of being retried forever or silently piling up. */
+export function queueOutcome(outcome) {
+  return {
+    status: outcome === 'sent' ? 'sent' : outcome === 'rejected' ? 'skipped' : 'pending',
+    retryable: outcome === 'queued',
+    globalBlocked: outcome === 'blocked',
+  };
+}
+
 export async function expireQueue(db, cfg) {
   const now = Math.floor(Date.now() / 1000);
   const maxAge = Number(cfg?.maxQueueAgeS || 900);
@@ -197,7 +238,7 @@ export async function expireQueue(db, cfg) {
  * expireQueue) when it is too old to be trusted. The circuit verdict is re-taken
  * here, so a queued action can never bypass a policy change made in the meantime.
  */
-export async function drainQueue(env, cfg, limit = 3) {
+export async function drainQueue(env, cfg, limit = 3, nonceContext = null) {
   if (!cfg.armed || !env.RELAYER_KEY) return 0;
   const db = env.DB;
   const now = Math.floor(Date.now() / 1000);
@@ -214,7 +255,7 @@ export async function drainQueue(env, cfg, limit = 3) {
     if (!step || typeof step !== 'object') {
       step = { target: row.target, value: row.value, data: row.data, memo: row.memo || '' };
     }
-    const outcome = await submitStep(env, cfg, step, row.ruleId, { queueId: row.id });
+    const outcome = await submitStep(env, cfg, step, row.ruleId, { queueId: row.id, nonceContext });
     if (outcome === 'sent') {
       sent += 1;
       continue;
@@ -238,9 +279,11 @@ async function enqueue(db, cfg, step, reason, ruleId) {
     .bind(step.target, String(step.value), step.data, ts - maxAge)
     .first();
   if (dup) return false;
+  const tradeId = step.tradeId || leaseToken();
+  step.tradeId = tradeId;
   await db
-    .prepare('INSERT INTO queue (ts, rule_id, target, value, data, memo, status, reason, steps, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(ts, ruleId || null, step.target, String(step.value), step.data, step.memo || '', 'pending', reason, JSON.stringify([step]), ts)
+    .prepare('INSERT INTO queue (trade_id, ts, rule_id, target, value, data, memo, status, reason, steps, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(tradeId, ts, ruleId || null, step.target, String(step.value), step.data, step.memo || '', 'pending', reason, JSON.stringify([step]), ts)
     .run();
   await logRow(db, 'QUEUE', 'Execution queued', `${step.memo || 'action'} · ${reason}`, { ruleId });
   return true;
@@ -281,6 +324,8 @@ export async function buildTradeSteps(env, cfg, side, amountUsd, prices, now = M
     if (path.filter(Boolean).length < 2) return { steps: [], reason: 'swap path for OKB→USDT not configured' };
     const amountNative = usdToUnits(amountUsd, okb, 18);
     if (amountNative <= 0n) return { steps: [], reason: 'trade too small' };
+    const liquidity = await liquidityGuard(env, cfg, path, prices);
+    if (liquidity.error) return { steps: [], reason: liquidity.error };
     const priced = await minOutFromPool(env, cfg, amountNative, path, usdToUnits(amountUsd, usdtPrice, cfg.usdtDecimals), cfg.usdtDecimals);
     if (priced.error) return { steps: [], reason: priced.error };
     const data = callWithAddressArray(
@@ -306,6 +351,8 @@ export async function buildTradeSteps(env, cfg, side, amountUsd, prices, now = M
   if (path.filter(Boolean).length < 2) return { steps: [], reason: 'swap path for USDT→OKB not configured' };
   const amountIn = usdToUnits(amountUsd, usdtPrice, cfg.usdtDecimals);
   if (amountIn <= 0n) return { steps: [], reason: 'trade too small' };
+  const liquidity = await liquidityGuard(env, cfg, path, prices);
+  if (liquidity.error) return { steps: [], reason: liquidity.error };
   const priced = await minOutFromPool(env, cfg, amountIn, path, usdToUnits(amountUsd, okb, 18), 18);
   if (priced.error) return { steps: [], reason: priced.error };
   return {
@@ -353,6 +400,17 @@ export async function buildTradeSteps(env, cfg, side, amountUsd, prices, now = M
  * off-chain feed. A feed that disagrees with the pool by more than
  * `maxFeedDeviationBps` stops the trade instead of sizing it from a wrong number.
  */
+async function liquidityGuard(env, cfg, path, prices) {
+  if (!cfg.factory) return { error: 'DEX factory not configured; refusing trade without liquidity validation' };
+  const pool = await chain.pairReserves(env, cfg.factory, path[0], path[1]);
+  const nativeFirst = pool.token0 === path[0].toLowerCase();
+  const nativeReserve = Number(formatUnits(nativeFirst ? pool.reserve0 : pool.reserve1, 18));
+  const stableReserve = Number(formatUnits(nativeFirst ? pool.reserve1 : pool.reserve0, cfg.usdtDecimals));
+  const depthUsd = Math.min(nativeReserve * Number(prices.okb), stableReserve * Number(prices.usdt || 1)) * 2;
+  if (!Number.isFinite(depthUsd) || depthUsd < cfg.minLiquidityUsd) return { error: `pool liquidity $${Number(depthUsd || 0).toFixed(2)} below minimum $${cfg.minLiquidityUsd}` };
+  return { pool, depthUsd };
+}
+
 async function minOutFromPool(env, cfg, amountIn, path, feedOut, outDecimals) {
   let onchain = null;
   try {
@@ -366,8 +424,13 @@ async function minOutFromPool(env, cfg, amountIn, path, feedOut, outDecimals) {
   }
   const diff = feedOut > onchain ? feedOut - onchain : onchain - feedOut;
   const deviationBps = Number((diff * 10000n) / onchain);
+  if (onchain <= 0n) return { error: 'zero-liquidity pool quote - refusing trade' };
   if (deviationBps > cfg.maxFeedDeviationBps) {
     return { error: `feed deviates from the pool by ${deviationBps} bps (max ${cfg.maxFeedDeviationBps}) - refusing to trade` };
+  }
+  const impactBps = Number((diff * 10000n) / (feedOut || 1n));
+  if (impactBps > cfg.maxPriceImpactBps) {
+    return { error: `estimated price impact ${impactBps} bps exceeds max ${cfg.maxPriceImpactBps} bps` };
   }
   const base = feedOut < onchain ? feedOut : onchain;
   return { minOut: bps(base, cfg.slippageBps), note: `pool quote ${formatUnits(onchain, outDecimals)}` };
@@ -444,7 +507,11 @@ async function submitStep(env, cfg, step, ruleId, opts = {}) {
     const maxFee = baseGas * 2n > tip * 2n ? baseGas * 2n : tip * 2n;
     const tx = {
       chainId: cfg.chainId,
-      nonce: await chain.nonceOf(env, relayer),
+      nonce: opts.nonceContext
+        ? (opts.nonceContext.next === null
+          ? (opts.nonceContext.address = relayer, opts.nonceContext.next = await chain.nonceOf(env, relayer), opts.nonceContext.next++)
+          : opts.nonceContext.next++)
+        : await chain.nonceOf(env, relayer),
       maxPriorityFeePerGas: tip,
       maxFeePerGas: maxFee,
       gasLimit: 0n,
@@ -621,7 +688,9 @@ async function evaluateRebalance(env, cfg, prices, holdings) {
 export async function tick(env, source = 'cron') {
   const db = env.DB;
   const started = Date.now();
-  if (!(await lock(db))) return { skipped: 'another tick is running' };
+  const lease = await acquireTickLock(db);
+  if (!lease) return { skipped: 'another tick is running' };
+  await ensureTradeColumn(db);
 
   let decisions = 0;
   let executions = 0;
@@ -640,6 +709,7 @@ export async function tick(env, source = 'cron') {
       await logRow(db, 'ERROR', 'No RPC endpoint', 'add the RPC_URL secret in the server view');
       return { skipped: 'no rpc' };
     }
+    const nonceContext = { address: null, next: null };
 
     const prices = await currentPrices(env, db).catch(() => null);
     if (prices?.okb) {
@@ -677,7 +747,7 @@ export async function tick(env, source = 'cron') {
     await expireQueue(db, cfg).catch(() => {});
     /* Anything queued while the gates were closed is re-validated and sent first. */
     try {
-      const drained = await drainQueue(env, cfg);
+      const drained = await drainQueue(env, cfg, 3, nonceContext);
       executions += drained;
       if (drained > 0) decisions += drained;
     } catch (error) {
@@ -743,6 +813,8 @@ export async function tick(env, source = 'cron') {
       if (!plan || !plan.steps.length) continue;
       await logRow(db, 'TRIGGER', `${rule.name}: firing`, plan.note, { ruleId: rule.id });
       await touchRule(db, rule, nowS);
+      const tradeId = leaseToken();
+      for (const plannedStep of plan.steps) plannedStep.tradeId = tradeId;
 
       // The daily budget counts *trades*, not RPC calls: the approve and the swap of
       // one plan are one trade, so a buy no longer eats two of the day's allowance.
@@ -753,7 +825,8 @@ export async function tick(env, source = 'cron') {
           if (await enqueue(db, cfg, step, `daily trade budget of ${cfg.maxTradesPerDay} reached`, rule.id)) queued += 1;
           continue;
         }
-        const outcome = await submitStep(env, cfg, step, rule.id);
+        if (!(await renewTickLock(db, lease))) return { error: 'tick lease lost before submission' };
+        const outcome = await submitStep(env, cfg, step, rule.id, { nonceContext });
         if (outcome === 'sent') {
           executions += 1;
           planSent += 1;
@@ -779,7 +852,7 @@ export async function tick(env, source = 'cron') {
     await logRow(db, 'ERROR', 'Daemon cycle failed', error?.message || String(error));
     return { error: error?.message || String(error) };
   } finally {
-    await unlock(db);
+    await releaseTickLock(db, lease);
   }
 }
 

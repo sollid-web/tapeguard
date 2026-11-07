@@ -49,6 +49,7 @@ CREATE INDEX IF NOT EXISTS ticks_ts ON ticks (ts DESC);
 -- kill switch / activation fee stops automatic submission).
 CREATE TABLE IF NOT EXISTS queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  trade_id TEXT NOT NULL DEFAULT '',
   ts INTEGER NOT NULL,
   rule_id TEXT,
   target TEXT NOT NULL,
@@ -62,6 +63,7 @@ CREATE TABLE IF NOT EXISTS queue (
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS queue_status ON queue (status, ts DESC);
+CREATE INDEX IF NOT EXISTS queue_trade ON queue (trade_id, ts DESC);
 
 -- Owner sessions: only the SHA-256 of the token is stored.
 CREATE TABLE IF NOT EXISTS sessions (

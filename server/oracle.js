@@ -7,6 +7,7 @@
 // Whatever happens, the last known value is kept and reused instead of guessing.
 
 const CACHE_SECONDS = 45;
+const MAX_EXECUTION_CACHE_AGE = 60;
 const MANUAL_TTL_SECONDS = 3600;
 const PUBLIC_FEED = 'https://api.coingecko.com/api/v3/simple/price?ids=okb,tether&vs_currencies=usd&precision=4';
 // Second, independent source. X Layer is OKX's chain, so OKX is the natural
@@ -34,9 +35,7 @@ async function fetchSecondary () {
 /** Marks the price unusable when the two sources disagree beyond tolerance. */
 async function crossChecked (prices) {
   const secondary = await fetchSecondary();
-  if (!secondary) {
-    return { ...prices, secondary: null, disagree: false, deviationBps: 0, check: 'single source: cross-check feed unavailable' };
-  }
+  if (!secondary) throw new Error('required secondary price feed unavailable');
   const diff = prices.okb > secondary.okb ? prices.okb - secondary.okb : secondary.okb - prices.okb;
   const deviationBps = Math.round((diff / secondary.okb) * 10000);
   const disagree = deviationBps > MAX_DEVIATION_BPS;
@@ -110,7 +109,7 @@ export async function currentPrices (env, db) {
     return crossChecked({ okb: cached.usd, usdt: cachedUsdt ? cachedUsdt.usd : 1, source: 'manual', ts: cached.ts, stale: false });
   }
   // 2. a fresh cached value.
-  if (cached && nowSeconds - cached.ts < CACHE_SECONDS) {
+  if (cached && nowSeconds - cached.ts < Math.min(CACHE_SECONDS, MAX_EXECUTION_CACHE_AGE)) {
     return crossChecked({ okb: cached.usd, usdt: cachedUsdt ? cachedUsdt.usd : 1, source: cached.source, ts: cached.ts, stale: false });
   }
   // 3. ask the feed.
@@ -121,17 +120,8 @@ export async function currentPrices (env, db) {
       db.prepare('INSERT INTO prices (asset, usd, ts, source) VALUES (?, ?, ?, ?) ON CONFLICT(asset) DO UPDATE SET usd = excluded.usd, ts = excluded.ts, source = excluded.source').bind('usdt', fresh.usdt, nowSeconds, fresh.source),
     ]);
     return crossChecked({ okb: fresh.okb, usdt: fresh.usdt, source: fresh.source, ts: nowSeconds, stale: false });
-  } catch (error) {
-    // 4. never guess: reuse the last known value and say it is stale.
-    if (cached) {
-      return crossChecked({
-        okb: cached.usd,
-        usdt: cachedUsdt ? cachedUsdt.usd : 1,
-        source: cached.source + ' (stale: ' + String(error.message || error) + ')',
-        ts: cached.ts,
-        stale: true,
-      });
-    }
+  } catch {
+    // Execution prices fail closed: stale cache and single-feed results are never traded.
     return null;
   }
 }

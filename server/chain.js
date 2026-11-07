@@ -133,6 +133,23 @@ export async function containerSimulate (env, container, target, value, data) {
 
 /** Router quote for an exact-input swap: the last hop of getAmountsOut().
  *  Used to cross-check the off-chain price before a trade is signed. */
+export async function pairReserves (env, factory, tokenA, tokenB) {
+  if (!factory || !tokenA || !tokenB) throw new Error('factory and token addresses are required');
+  const pairWords = decodeWords(await callData(env, factory, encodeCall('getPair(address,address)', [encodeAddress(tokenA), encodeAddress(tokenB)])));
+  const pair = wordToAddress(pairWords[0]);
+  if (!pair || /^0x0+$/.test(pair.slice(2))) throw new Error('no liquidity pair configured');
+  const [token0Words, words] = await Promise.all([
+    callData(env, pair, encodeCall('token0()', [])),
+    callData(env, pair, encodeCall('getReserves()', [])),
+  ]).then(([token0Data, reservesData]) => [decodeWords(token0Data), decodeWords(reservesData)]);
+  if (words.length < 3) throw new Error('pair returned no reserves');
+  const token0 = wordToAddress(token0Words[0]).toLowerCase();
+  const reserve0 = wordToBigInt(words[0]);
+  const reserve1 = wordToBigInt(words[1]);
+  if (reserve0 === 0n || reserve1 === 0n) throw new Error('pool has zero liquidity');
+  return { pair, reserve0, reserve1, token0, token1: token0 === tokenA.toLowerCase() ? tokenB.toLowerCase() : tokenA.toLowerCase() };
+}
+
 export async function quoteOut (env, router, amountIn, path) {
   if (!router || !Array.isArray(path) || path.length < 2) throw new Error('quote needs a router and a path');
   const data =

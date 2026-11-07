@@ -1,0 +1,15 @@
+name = "tapeguard"
+main = "server/index.js"
+compatibility_date = "2024-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tapeguardian"
+database_id = "4ecc67a2-c0d4-4a2d-8896-94840b6b9e20"
+
+[assets]
+directory = "."
+binding = "ASSETS"
+
+[vars]
+APP_ORIGINS = "https://tapeguard.tapeguard.workers.dev/"

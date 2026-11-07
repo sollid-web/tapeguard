@@ -50,13 +50,14 @@ CREATE INDEX IF NOT EXISTS ticks_ts ON ticks (ts DESC);
 CREATE TABLE IF NOT EXISTS queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   trade_id TEXT NOT NULL DEFAULT '',
+  claim_token TEXT NOT NULL DEFAULT '',
   ts INTEGER NOT NULL,
   rule_id TEXT,
   target TEXT NOT NULL,
   value TEXT NOT NULL,
   data TEXT NOT NULL,
   memo TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL DEFAULT 'pending',   -- pending | sent | failed | skipped
+  status TEXT NOT NULL DEFAULT 'pending',   -- pending | processing | sent | ambiguous | failed | skipped | expired
   tx_hash TEXT,
   reason TEXT NOT NULL DEFAULT '',
   steps TEXT NOT NULL DEFAULT '[]',

@@ -1,5 +1,31 @@
 # TapeGuardian — autonomous agentic wallet on X Layer
 
+## Canonical contract evidence
+
+The Foundry deployment workspace is vendored at [`foundry/`](foundry/). It contains the exact
+contracts, regression tests, deployment script, pinned forge-std metadata, and CI workflow used for
+contract verification. Generated build output and secrets are intentionally excluded; use
+`foundry/.env.example` to create local deployment configuration.
+
+From the project root, reproduce the contract checks with:
+
+```sh
+cd foundry
+forge fmt --check
+forge build
+forge test -vvv
+```
+
+The copied workspace currently passes 14 Foundry tests. The configured X Layer testnet RPC reports
+chain ID 1952 (`0x7a0`). Contract redeployment is authorized but has not completed in this environment
+because the deployment command requires explicit production-deploy permission. Existing deployed
+addresses must not be treated as addresses for the newly verified bytecode until deployment receipts
+and on-chain bytecode checks are recorded here.
+
+The frontend ABI artifacts in [`abi/`](abi/) are generated from the copied Foundry build and embedded
+in `index.html`. They are source artifacts only until the corresponding contracts are redeployed and
+verified on chain.
+
 ## In plain words (what it is, and why you would want it)
 
 TapeGuardian is an **autonomous agent** — a program that trades for you without you watching. The

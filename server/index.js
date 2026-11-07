@@ -236,16 +236,18 @@ async function handle(request, env, ctx) {
         if (typeof filter !== 'object' || Array.isArray(filter)) return bad('eth_getLogs filter must be an object');
         if (filter.blockHash !== undefined && (typeof filter.blockHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(filter.blockHash))) return bad('invalid blockHash');
         const parseBlock = (value) => {
-          if (value === undefined) return null;
-          if (value === 'latest' || value === 'earliest' || value === 'pending') return value;
-          if (typeof value !== 'string' || !/^0x[0-9a-fA-F]+$/.test(value)) return null;
-          return Number(BigInt(value));
+          if (typeof value !== 'string' || !/^0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)$/.test(value)) return null;
+          try { return BigInt(value); } catch { return null; }
         };
-        const from = parseBlock(filter.fromBlock);
-        const to = parseBlock(filter.toBlock);
-        if (filter.fromBlock !== undefined && from === null || filter.toBlock !== undefined && to === null) return bad('fromBlock/toBlock must be supported block tags or hex quantities');
-        if (typeof from === 'number' && typeof to === 'number' && (to < from || to - from > 5000)) return bad('eth_getLogs is limited to a 5000 block range', 400);
-        if (filter.blockHash !== undefined && (filter.fromBlock !== undefined || filter.toBlock !== undefined)) return bad('blockHash cannot be combined with block range');
+        const hasHash = filter.blockHash !== undefined;
+        if (hasHash && (filter.fromBlock !== undefined || filter.toBlock !== undefined)) return bad('blockHash cannot be combined with block range');
+        if (!hasHash && (filter.fromBlock === undefined || filter.toBlock === undefined)) return bad('eth_getLogs requires blockHash or both bounded block numbers');
+        if (!hasHash) {
+          const from = parseBlock(filter.fromBlock);
+          const to = parseBlock(filter.toBlock);
+          if (from === null || to === null) return bad('eth_getLogs requires canonical hex block numbers, not symbolic tags');
+          if (to < from || to - from > 5000n) return bad('eth_getLogs is limited to a 5000 block range', 400);
+        }
       }
       clean.push({ jsonrpc: '2.0', id: call.id ?? 1, method: call.method, params });
     }
@@ -280,8 +282,8 @@ async function handle(request, env, ctx) {
   if (path === '/api/queue' && method === 'GET') {
     const status = url.searchParams.get('status');
     const statement = status
-      ? db.prepare('SELECT id, ts, target, value, memo, status, tx_hash AS txHash, reason FROM queue WHERE status = ? ORDER BY id DESC LIMIT 40').bind(status)
-      : db.prepare('SELECT id, ts, target, value, memo, status, tx_hash AS txHash, reason FROM queue ORDER BY id DESC LIMIT 40');
+      ? db.prepare('SELECT id, trade_id AS tradeId, ts, target, value, memo, status, tx_hash AS txHash, reason FROM queue WHERE status = ? ORDER BY id DESC LIMIT 40').bind(status)
+      : db.prepare('SELECT id, trade_id AS tradeId, ts, target, value, memo, status, tx_hash AS txHash, reason FROM queue ORDER BY id DESC LIMIT 40');
     const { results } = await statement.all();
     return json({ queue: results || [] });
   }
@@ -464,7 +466,7 @@ async function handle(request, env, ctx) {
       const snapshot = await statusSnapshot(env);
       const { results: rules } = await db.prepare('SELECT * FROM rules ORDER BY id').all();
       const { results: ticks } = await db.prepare('SELECT * FROM ticks ORDER BY id DESC LIMIT 60').all();
-      const { results: queue } = await db.prepare('SELECT id, ts, target, value, memo, status, tx_hash AS txHash, reason FROM queue ORDER BY id DESC LIMIT 60').all();
+      const { results: queue } = await db.prepare('SELECT id, trade_id AS tradeId, ts, target, value, memo, status, tx_hash AS txHash, reason FROM queue ORDER BY id DESC LIMIT 60').all();
       const { results: log } = await db.prepare('SELECT * FROM log ORDER BY id DESC LIMIT 200').all();
       return json({ product: 'TapeGuardian', generatedAt: new Date().toISOString(), snapshot, rules: rules || [], ticks: ticks || [], queue: queue || [], log: log || [] });
     }

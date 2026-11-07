@@ -13,8 +13,7 @@ interface IPolicyCircuit {
         view
         returns (bool approved, string memory reason);
 
-    function recordExecution(uint256 agentNonce, uint256 value, address token, uint256 tokenAmount)
-        external;
+    function recordExecution(uint256 agentNonce, uint256 value, address token, uint256 tokenAmount) external;
 
     function authorizedRouters(address router) external view returns (bool);
 }
@@ -48,6 +47,7 @@ contract AgentContainer {
     error Reentrancy();
     error TransferFailed();
     error RouterNotAuthorised();
+    error NonCanonicalTokenCalldata();
 
     // ----------------------------------------------------------------- events
     event Funded(address indexed from, uint256 amount);
@@ -160,6 +160,7 @@ contract AgentContainer {
         // Native funds: the fee revenue stays reserved for withdrawFees().
         if (value > 0 && value > _available()) revert InsufficientBalance();
 
+        _validateTokenCalldata(data);
         (address token, uint256 tokenAmount) = _tokenOutflow(target, data);
         if (_isApproval(data)) {
             address router = address(uint160(_word(data, 4)));
@@ -171,8 +172,7 @@ contract AgentContainer {
             if (!tokenOk) revert PolicyRejected(tokenReason);
         }
 
-        (bool approved, string memory reason) =
-            IPolicyCircuit(policyContract).check(address(this), target, value, data);
+        (bool approved, string memory reason) = IPolicyCircuit(policyContract).check(address(this), target, value, data);
         if (!approved) revert PolicyRejected(reason);
 
         uint256 execNonce = nonce + 1;
@@ -203,6 +203,7 @@ contract AgentContainer {
         address policyContract = policy;
         if (policyContract == address(0)) return (false, "POLICY_NOT_SET");
 
+        _validateTokenCalldata(data);
         (address token, uint256 tokenAmount) = _tokenOutflow(target, data);
         if (_isApproval(data)) {
             address router = address(uint160(_word(data, 4)));
@@ -325,14 +326,7 @@ contract AgentContainer {
         )
     {
         return (
-            policy,
-            paused,
-            block.timestamp < activeUntil,
-            activationFee,
-            activeUntil,
-            accruedFees,
-            executions,
-            nonce
+            policy, paused, block.timestamp < activeUntil, activationFee, activeUntil, accruedFees, executions, nonce
         );
     }
 
@@ -348,19 +342,27 @@ contract AgentContainer {
     }
 
     function _isApproval(bytes calldata data) private pure returns (bool) {
-        if (data.length < 36) return false;
+        if (data.length < 4) return false;
         bytes4 sel = _selector(data);
         return sel == SEL_APPROVE || sel == SEL_INCREASE_ALLOWANCE;
+    }
+
+    /// @dev Sensitive ERC-20 calls must use canonical ABI calldata. Solidity token
+    /// dispatchers commonly ignore trailing bytes, so accepting them here would let
+    /// an otherwise valid token transfer evade the outflow accounting below.
+    function _validateTokenCalldata(bytes calldata data) private pure {
+        if (data.length < 4) return;
+        bytes4 sel = _selector(data);
+        uint256 expected = 0;
+        if (sel == SEL_APPROVE || sel == SEL_INCREASE_ALLOWANCE || sel == SEL_TRANSFER) expected = 68;
+        else if (sel == SEL_TRANSFER_FROM) expected = 100;
+        if (expected != 0 && data.length != expected) revert NonCanonicalTokenCalldata();
     }
 
     /// @dev Detects an ERC-20 outflow hidden in the calldata: the token is the call
     ///      target itself, and the amount is the last argument of the call.
     ///      Returns (address(0), 0) when the call moves no tokens.
-    function _tokenOutflow(address target, bytes calldata data)
-        private
-        pure
-        returns (address token, uint256 amount)
-    {
+    function _tokenOutflow(address target, bytes calldata data) private pure returns (address token, uint256 amount) {
         if (data.length < 4) return (address(0), 0);
         bytes4 sel = _selector(data);
         if ((sel == SEL_APPROVE || sel == SEL_INCREASE_ALLOWANCE || sel == SEL_TRANSFER) && data.length == 68) {

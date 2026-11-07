@@ -25,6 +25,7 @@ function leaseToken () {
 
 async function ensureTradeColumn (db) {
   try { await db.prepare("ALTER TABLE queue ADD COLUMN trade_id TEXT NOT NULL DEFAULT ''").run(); } catch { /* already migrated */ }
+  try { await db.prepare("ALTER TABLE queue ADD COLUMN claim_token TEXT NOT NULL DEFAULT ''").run(); } catch { /* already migrated */ }
   try { await db.prepare('CREATE INDEX IF NOT EXISTS queue_trade ON queue (trade_id, ts DESC)').run(); } catch { /* already present */ }
 }
 
@@ -180,9 +181,10 @@ export async function acquireTickLock(db) {
 export async function renewTickLock(db, lease) {
   if (!lease) return false;
   const ts = Math.floor(Date.now() / 1000);
+  if (Number(lease.expiresAt || 0) <= ts) return false;
   const next = { token: lease.token, expiresAt: ts + LOCK_TTL };
-  const result = await db.prepare("UPDATE state SET value = ?, ts = ? WHERE key = 'tick_lock' AND value = ?")
-    .bind(JSON.stringify(next), ts, JSON.stringify(lease)).run();
+  const result = await db.prepare("UPDATE state SET value = ?, ts = ? WHERE key = 'tick_lock' AND value = ? AND ts >= ?")
+    .bind(JSON.stringify(next), ts, JSON.stringify(lease), ts - LOCK_TTL).run();
   if ((result.meta?.changes ?? 0) !== 1) return false;
   lease.expiresAt = next.expiresAt;
   return true;
@@ -197,7 +199,7 @@ export async function releaseTickLock(db, lease) {
 async function tradesLastDay(db) {
   const since = Math.floor(Date.now() / 1000) - DAY;
   const row = await db
-    .prepare("SELECT COUNT(DISTINCT trade_id) AS n FROM queue WHERE ts >= ? AND trade_id <> '' AND status IN ('sent', 'pending', 'confirmed')")
+    .prepare("SELECT COUNT(DISTINCT trade_id) AS n FROM queue WHERE ts >= ? AND trade_id <> '' AND status IN ('sent', 'pending', 'confirmed', 'ambiguous')")
     .bind(since)
     .first();
   return Number(row?.n || 0);
@@ -219,7 +221,7 @@ export async function expireQueue(db, cfg) {
   const maxAge = Number(cfg?.maxQueueAgeS || 900);
   const cutoff = now - maxAge;
   const res = await db
-    .prepare("UPDATE queue SET status = 'expired', reason = ?, updated_at = ? WHERE status = 'pending' AND ts < ?")
+    .prepare("UPDATE queue SET status = 'expired', claim_token = '', reason = ?, updated_at = ? WHERE status IN ('pending', 'processing') AND ts < ?")
     .bind(`expired: not sent within ${maxAge}s`, now, cutoff)
     .run();
   const changed = Number(res?.meta?.changes || 0);
@@ -238,24 +240,42 @@ export async function expireQueue(db, cfg) {
  * expireQueue) when it is too old to be trusted. The circuit verdict is re-taken
  * here, so a queued action can never bypass a policy change made in the meantime.
  */
-export async function drainQueue(env, cfg, limit = 3, nonceContext = null) {
+export async function drainQueue(env, cfg, limit = 3, nonceContext = null, lease = null) {
   if (!cfg.armed || !env.RELAYER_KEY) return 0;
   const db = env.DB;
   const now = Math.floor(Date.now() / 1000);
   const maxAge = Number(cfg.maxQueueAgeS || 900);
   const { results } = await db
-    .prepare("SELECT id, rule_id AS ruleId, target, value, data, memo, steps FROM queue WHERE status = 'pending' AND ts >= ? ORDER BY id LIMIT ?")
+    .prepare("SELECT id, trade_id AS tradeId, rule_id AS ruleId, target, value, data, memo, steps FROM queue WHERE status = 'pending' AND ts >= ? ORDER BY id LIMIT ?")
     .bind(now - maxAge, limit)
     .all();
 
   let sent = 0;
   for (const row of results || []) {
+    if (lease && !(await renewTickLock(db, lease))) break;
+    const claimToken = leaseToken();
+    const claimed = await db.prepare("UPDATE queue SET status = 'processing', claim_token = ?, updated_at = ? WHERE id = ? AND status = 'pending'")
+      .bind(claimToken, now, row.id).run();
+    if ((claimed.meta?.changes ?? 0) !== 1) continue;
     let step = null;
     try { step = (JSON.parse(row.steps || '[]') || [])[0] || null; } catch { step = null; }
     if (!step || typeof step !== 'object') {
-      step = { target: row.target, value: row.value, data: row.data, memo: row.memo || '' };
+      step = { target: row.target, value: row.value, data: row.data, memo: row.memo || '', tradeId: row.tradeId };
     }
-    const outcome = await submitStep(env, cfg, step, row.ruleId, { queueId: row.id, nonceContext });
+    if (!step.tradeId) step.tradeId = row.tradeId;
+    step.claimToken = claimToken;
+    if (step.dependsOn !== null && step.dependsOn !== undefined) {
+      const prior = await db.prepare("SELECT status, steps FROM queue WHERE trade_id = ?").bind(step.tradeId).all();
+      let predecessor = null;
+      for (const candidate of prior.results || []) {
+        try {
+          const candidateStep = (JSON.parse(candidate.steps || '[]') || [])[0];
+          if (candidateStep && candidateStep.stepIndex === step.dependsOn) predecessor = candidate;
+        } catch { /* malformed legacy metadata is handled below */ }
+      }
+      if (!predecessor || !['sent', 'confirmed'].includes(predecessor.status)) continue;
+    }
+    const outcome = await submitStep(env, cfg, step, row.ruleId, { queueId: row.id, queueClaim: claimToken, nonceContext });
     if (outcome === 'sent') {
       sent += 1;
       continue;
@@ -326,7 +346,7 @@ export async function buildTradeSteps(env, cfg, side, amountUsd, prices, now = M
     if (amountNative <= 0n) return { steps: [], reason: 'trade too small' };
     const liquidity = await liquidityGuard(env, cfg, path, prices);
     if (liquidity.error) return { steps: [], reason: liquidity.error };
-    const priced = await minOutFromPool(env, cfg, amountNative, path, usdToUnits(amountUsd, usdtPrice, cfg.usdtDecimals), cfg.usdtDecimals);
+    const priced = await minOutFromPool(env, cfg, amountNative, path, usdToUnits(amountUsd, usdtPrice, cfg.usdtDecimals), cfg.usdtDecimals, liquidity.pool);
     if (priced.error) return { steps: [], reason: priced.error };
     const data = callWithAddressArray(
       'swapExactETHForTokens(uint256,address[],address,uint256)',
@@ -353,7 +373,7 @@ export async function buildTradeSteps(env, cfg, side, amountUsd, prices, now = M
   if (amountIn <= 0n) return { steps: [], reason: 'trade too small' };
   const liquidity = await liquidityGuard(env, cfg, path, prices);
   if (liquidity.error) return { steps: [], reason: liquidity.error };
-  const priced = await minOutFromPool(env, cfg, amountIn, path, usdToUnits(amountUsd, okb, 18), 18);
+  const priced = await minOutFromPool(env, cfg, amountIn, path, usdToUnits(amountUsd, okb, 18), 18, liquidity.pool);
   if (priced.error) return { steps: [], reason: priced.error };
   return {
     steps: [
@@ -402,16 +422,27 @@ export async function buildTradeSteps(env, cfg, side, amountUsd, prices, now = M
  */
 async function liquidityGuard(env, cfg, path, prices) {
   if (!cfg.factory) return { error: 'DEX factory not configured; refusing trade without liquidity validation' };
+  if (!Array.isArray(path) || path.length !== 2) return { error: 'only two-token pools have validated reserve depth' };
   const pool = await chain.pairReserves(env, cfg.factory, path[0], path[1]);
-  const nativeFirst = pool.token0 === path[0].toLowerCase();
-  const nativeReserve = Number(formatUnits(nativeFirst ? pool.reserve0 : pool.reserve1, 18));
-  const stableReserve = Number(formatUnits(nativeFirst ? pool.reserve1 : pool.reserve0, cfg.usdtDecimals));
-  const depthUsd = Math.min(nativeReserve * Number(prices.okb), stableReserve * Number(prices.usdt || 1)) * 2;
+  const a = path[0].toLowerCase();
+  const b = path[1].toLowerCase();
+  const token0 = pool.token0.toLowerCase();
+  const reserveA = token0 === a ? pool.reserve0 : pool.reserve1;
+  const reserveB = token0 === a ? pool.reserve1 : pool.reserve0;
+  if (reserveA <= 0n || reserveB <= 0n) return { error: 'pool has zero liquidity' };
+  const usdt = String(cfg.usdt || '').toLowerCase();
+  const native = String(cfg.wrappedNative || '').toLowerCase();
+  if (![a, b].includes(usdt) || ![a, b].includes(native)) return { error: 'trade path must connect configured USDT and wrapped native assets' };
+  const stableReserve = a === usdt ? reserveA : reserveB;
+  const nativeReserve = a === native ? reserveA : reserveB;
+  const stableUsd = Number(formatUnits(stableReserve, cfg.usdtDecimals)) * Number(prices.usdt || 1);
+  const nativeUsd = Number(formatUnits(nativeReserve, 18)) * Number(prices.okb || 0);
+  const depthUsd = Math.min(nativeUsd, stableUsd) * 2;
   if (!Number.isFinite(depthUsd) || depthUsd < cfg.minLiquidityUsd) return { error: `pool liquidity $${Number(depthUsd || 0).toFixed(2)} below minimum $${cfg.minLiquidityUsd}` };
   return { pool, depthUsd };
 }
 
-async function minOutFromPool(env, cfg, amountIn, path, feedOut, outDecimals) {
+async function minOutFromPool(env, cfg, amountIn, path, feedOut, outDecimals, pool) {
   let onchain = null;
   try {
     onchain = await chain.quoteOut(env, cfg.router, amountIn, path);
@@ -428,9 +459,18 @@ async function minOutFromPool(env, cfg, amountIn, path, feedOut, outDecimals) {
   if (deviationBps > cfg.maxFeedDeviationBps) {
     return { error: `feed deviates from the pool by ${deviationBps} bps (max ${cfg.maxFeedDeviationBps}) - refusing to trade` };
   }
-  const impactBps = Number((diff * 10000n) / (feedOut || 1n));
-  if (impactBps > cfg.maxPriceImpactBps) {
-    return { error: `estimated price impact ${impactBps} bps exceeds max ${cfg.maxPriceImpactBps} bps` };
+  let impactBps = 0;
+  if (pool && path.length === 2) {
+    const inputIsToken0 = pool.token0.toLowerCase() === path[0].toLowerCase();
+    const reserveIn = inputIsToken0 ? pool.reserve0 : pool.reserve1;
+    const reserveOut = inputIsToken0 ? pool.reserve1 : pool.reserve0;
+    if (reserveIn <= 0n || reserveOut <= 0n) return { error: 'zero-liquidity pool - refusing trade' };
+    const marginalOut = (amountIn * reserveOut) / reserveIn;
+    if (marginalOut <= 0n) return { error: 'trade is too small for reserve precision' };
+    impactBps = onchain < marginalOut ? Number(((marginalOut - onchain) * 10000n) / marginalOut) : 0;
+    if (impactBps > cfg.maxPriceImpactBps) {
+      return { error: `estimated price impact ${impactBps} bps exceeds max ${cfg.maxPriceImpactBps} bps` };
+    }
   }
   const base = feedOut < onchain ? feedOut : onchain;
   return { minOut: bps(base, cfg.slippageBps), note: `pool quote ${formatUnits(onchain, outDecimals)}` };
@@ -484,11 +524,13 @@ async function submitStep(env, cfg, step, ruleId, opts = {}) {
   if (!verdict.approved) {
     const nowSec = Math.floor(Date.now() / 1000);
     if (queueId) {
-      await db.prepare("UPDATE queue SET status = 'skipped', reason = ?, updated_at = ? WHERE id = ?")
-        .bind(verdict.reason, nowSec, queueId).run();
+      await db.prepare("UPDATE queue SET status = 'skipped', reason = ?, claim_token = '', updated_at = ? WHERE id = ? AND status = 'processing' AND claim_token = ?")
+        .bind(verdict.reason, nowSec, queueId, opts.queueClaim || '').run();
     } else {
-      await db.prepare('INSERT INTO queue (ts, rule_id, target, value, data, memo, status, reason, steps, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(nowSec, ruleId || null, step.target, step.value, step.data, step.memo || '', 'skipped', verdict.reason, JSON.stringify([step]), nowSec)
+      const tradeId = step.tradeId || leaseToken();
+      step.tradeId = tradeId;
+      await db.prepare('INSERT INTO queue (trade_id, ts, rule_id, target, value, data, memo, status, reason, steps, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(tradeId, nowSec, ruleId || null, step.target, step.value, step.data, step.memo || '', 'skipped', verdict.reason, JSON.stringify([step]), nowSec)
         .run();
     }
     return 'rejected';
@@ -505,13 +547,19 @@ async function submitStep(env, cfg, step, ruleId, opts = {}) {
     const tip = await chain.maxPriorityFee(env);
     const baseGas = await chain.gasPrice(env);
     const maxFee = baseGas * 2n > tip * 2n ? baseGas * 2n : tip * 2n;
+    let reservedNonce;
+    if (opts.nonceContext) {
+      if (opts.nonceContext.next === null) {
+        opts.nonceContext.address = relayer;
+        opts.nonceContext.next = await chain.nonceOf(env, relayer);
+      }
+      reservedNonce = opts.nonceContext.next;
+    } else {
+      reservedNonce = await chain.nonceOf(env, relayer);
+    }
     const tx = {
       chainId: cfg.chainId,
-      nonce: opts.nonceContext
-        ? (opts.nonceContext.next === null
-          ? (opts.nonceContext.address = relayer, opts.nonceContext.next = await chain.nonceOf(env, relayer), opts.nonceContext.next++)
-          : opts.nonceContext.next++)
-        : await chain.nonceOf(env, relayer),
+      nonce: reservedNonce,
       maxPriorityFeePerGas: tip,
       maxFeePerGas: maxFee,
       gasLimit: 0n,
@@ -548,19 +596,39 @@ async function submitStep(env, cfg, step, ruleId, opts = {}) {
     try {
       hash = await chain.sendRaw(env, raw);
     } catch (error) {
-      if (kind !== 'eip1559') throw error;
-      // node rejected the type-2 envelope: retry once as a legacy transaction
-      kind = 'legacy';
-      hash = await chain.sendRaw(env, await signTransaction({ ...tx, gasPrice: maxFee }, key));
+      if (kind !== 'eip1559') {
+        // The node may have accepted the raw transaction before the response
+        // timed out. Never blindly rebroadcast at a new nonce.
+        const observed = await chain.nonceOf(env, relayer).catch(() => reservedNonce);
+        if (observed > reservedNonce) {
+          kind = 'ambiguous';
+          hash = `unknown-nonce:${reservedNonce.toString()}`;
+        } else throw error;
+      } else {
+        // node rejected the type-2 envelope: retry once as a legacy transaction
+        kind = 'legacy';
+        try {
+          hash = await chain.sendRaw(env, await signTransaction({ ...tx, gasPrice: maxFee }, key));
+        } catch (legacyError) {
+          const observed = await chain.nonceOf(env, relayer).catch(() => reservedNonce);
+          if (observed > reservedNonce) {
+            kind = 'ambiguous';
+            hash = `unknown-nonce:${reservedNonce.toString()}`;
+          } else throw legacyError;
+        }
+      }
     }
+    if (opts.nonceContext) opts.nonceContext.next = reservedNonce + 1n;
 
     const ts = Math.floor(Date.now() / 1000);
     if (queueId) {
-      await db.prepare('UPDATE queue SET status = ?, tx_hash = ?, reason = ?, updated_at = ? WHERE id = ?')
-        .bind('sent', hash, `submitted by relayer (${kind}) after re-check`, ts, queueId).run();
+      await db.prepare('UPDATE queue SET status = ?, tx_hash = ?, claim_token = \'\', reason = ?, updated_at = ? WHERE id = ? AND status = \'processing\' AND claim_token = ?')
+        .bind(kind === 'ambiguous' ? 'ambiguous' : 'sent', hash, kind === 'ambiguous' ? `broadcast outcome unknown at nonce ${reservedNonce.toString()} — operator reconciliation required` : `submitted by relayer (${kind}) after re-check`, ts, queueId, opts.queueClaim || '').run();
     } else {
-      await db.prepare('INSERT INTO queue (ts, rule_id, target, value, data, memo, status, tx_hash, reason, steps, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(ts, ruleId || null, step.target, step.value, step.data, step.memo || '', 'sent', hash, `submitted by relayer (${kind})`, JSON.stringify([step]), ts)
+      const tradeId = step.tradeId || leaseToken();
+      step.tradeId = tradeId;
+      await db.prepare('INSERT INTO queue (trade_id, ts, rule_id, target, value, data, memo, status, tx_hash, reason, steps, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(tradeId, ts, ruleId || null, step.target, step.value, step.data, step.memo || '', kind === 'ambiguous' ? 'ambiguous' : 'sent', hash, kind === 'ambiguous' ? `broadcast outcome unknown at nonce ${reservedNonce.toString()} — operator reconciliation required` : `submitted by relayer (${kind})`, JSON.stringify([step]), ts)
         .run();
     }
     await logRow(db, 'EXEC', 'Executed through the container', `${step.memo || step.target} · tx ${hash} · ${kind}`, { txHash: hash, ruleId });
@@ -571,13 +639,16 @@ async function submitStep(env, cfg, step, ruleId, opts = {}) {
     // The reset is itself a container execution, so it goes through the same policy.
     if (step.onFailReset && !step.cleanup) {
       try {
-        await submitStep(env, cfg, {
+        await enqueue(db, cfg, {
           target: step.onFailReset,
           value: '0',
           data: encodeCall('approve(address,uint256)', [encodeAddress(cfg.router), encodeUint(0)]),
           memo: 'reset router allowance to 0 after a failed swap',
+          tradeId: step.tradeId,
+          stepIndex: (step.stepIndex || 0) + 1,
+          dependsOn: step.stepIndex || 0,
           cleanup: true,
-        }, ruleId);
+        }, 'swap failed; cleanup waits in the same trade workflow', ruleId);
       } catch {
         /* the next cycle retries the reset */
       }
@@ -691,6 +762,10 @@ export async function tick(env, source = 'cron') {
   const lease = await acquireTickLock(db);
   if (!lease) return { skipped: 'another tick is running' };
   await ensureTradeColumn(db);
+  let leaseLost = false;
+  const heartbeat = setInterval(() => {
+    renewTickLock(db, lease).then((ok) => { if (!ok) leaseLost = true; }).catch(() => { leaseLost = true; });
+  }, Math.max(1000, Math.floor((LOCK_TTL * 1000) / 3)));
 
   let decisions = 0;
   let executions = 0;
@@ -747,7 +822,7 @@ export async function tick(env, source = 'cron') {
     await expireQueue(db, cfg).catch(() => {});
     /* Anything queued while the gates were closed is re-validated and sent first. */
     try {
-      const drained = await drainQueue(env, cfg, 3, nonceContext);
+      const drained = await drainQueue(env, cfg, 3, nonceContext, lease);
       executions += drained;
       if (drained > 0) decisions += drained;
     } catch (error) {
@@ -819,20 +894,33 @@ export async function tick(env, source = 'cron') {
       // The daily budget counts *trades*, not RPC calls: the approve and the swap of
       // one plan are one trade, so a buy no longer eats two of the day's allowance.
       let planSent = 0;
-      for (const step of plan.steps) {
+      for (let stepIndex = 0; stepIndex < plan.steps.length; stepIndex += 1) {
+        const step = plan.steps[stepIndex];
+        step.stepIndex = stepIndex;
+        step.dependsOn = stepIndex > 0 ? stepIndex - 1 : null;
         decisions += 1;
         if (budget <= 0) {
           if (await enqueue(db, cfg, step, `daily trade budget of ${cfg.maxTradesPerDay} reached`, rule.id)) queued += 1;
           continue;
         }
-        if (!(await renewTickLock(db, lease))) return { error: 'tick lease lost before submission' };
+        if (leaseLost || !(await renewTickLock(db, lease))) return { error: 'tick lease lost before submission' };
         const outcome = await submitStep(env, cfg, step, rule.id, { nonceContext });
         if (outcome === 'sent') {
           executions += 1;
           planSent += 1;
-        } else if (outcome === 'queued') {
-          queued += 1;
+          continue;
         }
+        if (outcome === 'queued') queued += 1;
+        // A multi-step trade is an ordered workflow. Never submit a dependent
+        // swap/reset after its predecessor was queued, rejected, or failed.
+        for (let dependentIndex = stepIndex + 1; dependentIndex < plan.steps.length; dependentIndex += 1) {
+          const dependent = plan.steps[dependentIndex];
+          dependent.tradeId = tradeId;
+          dependent.stepIndex = dependentIndex;
+          dependent.dependsOn = dependentIndex - 1;
+          if (outcome !== 'rejected' && await enqueue(db, cfg, dependent, `waiting for trade step ${stepIndex} to succeed`, rule.id)) queued += 1;
+        }
+        break;
       }
       if (planSent > 0) budget -= 1;
     }
@@ -852,6 +940,7 @@ export async function tick(env, source = 'cron') {
     await logRow(db, 'ERROR', 'Daemon cycle failed', error?.message || String(error));
     return { error: error?.message || String(error) };
   } finally {
+    clearInterval(heartbeat);
     await releaseTickLock(db, lease);
   }
 }

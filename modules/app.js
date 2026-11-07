@@ -2,6 +2,9 @@ import { $, $$, mk, short, clean0x, uid, now, clock, dayfmt, fmtNum, fmtUnits, p
 import { ABI_OK, encodeCall, decodeOutputs, parseInput, keccak256, word } from './codec.js';
 import { CFG, CONFIG_WARNINGS, CONTRACTS, CONTRACT_NAMES, LIVE, API, CHAIN_ID, CHAINS, CHAIN } from './config.js';
 import { DEMO, SEL, lsGet, lsSet, defaultState } from './state.js';
+import { triggerThreshold, feeTotal } from './finance.js';
+import { createPolicy } from './policy.js';
+import { safeRpcUrl } from './rpc.js';
 
 (function(){
 'use strict';
@@ -57,6 +60,7 @@ var S;
 function persist(){ try{ lsSet(JSON.stringify(S)); }catch(e){} }
 function containerAddr(){ return (S.wallet.address && LIVE) ? (S.agent.container || null) : (S.agent.container || (LIVE?null:DEMO.container)); }
 function allowlist(){ return S.policy.allowlist; }
+policy = createPolicy({ getState:function(){ return S; }, chain:CHAIN, containerAddr:containerAddr, chainId:CHAIN_ID, selectors:SEL, now:now });
 
 /* =========================================================================
    4. Chain access
@@ -64,13 +68,6 @@ function allowlist(){ return S.policy.allowlist; }
 /* An RPC URL typed into a page is only accepted when it is a plain https endpoint:
    no credentials, no javascript:, no plain http. Anything else is ignored so an
    injected value cannot redirect every read of the app. */
-function safeRpcUrl(raw){
-  if(typeof raw !== 'string') return null;
-  var v = raw.trim();
-  if(!/^https:\/\/[a-z0-9]([a-z0-9.-]*[a-z0-9])?(\:[0-9]{2,5})?(\/[^\s"'<>]*)?$/i.test(v)) return null;
-  if(v.indexOf('@') !== -1) return null;
-  return v;
-}
 var USER_RPC = (function(){
   var raw = null;
   try{ raw = localStorage.getItem('tapeout.rpc'); }catch(e){ return null; }
@@ -141,61 +138,7 @@ function sendNative(to, valueWei){
 /* =========================================================================
    5. Policy engine (local mirror of the circuit rules)
    ========================================================================= */
-var RULE_CODE = {
-  'Circuit not paused':'PAUSED',
-  'Target on allowlist':'TARGET_NOT_ALLOWED',
-  'Selector permitted':'SELECTOR_NOT_ALLOWED',
-  'Per-transaction limit':'TX_LIMIT_EXCEEDED',
-  'Rolling 24h volume cap':'DAILY_VOLUME_EXCEEDED',
-  'Circuit validity window':'CIRCUIT_EXPIRED',
-  'Authorized requester':'NOT_AUTHORIZED'
-};
-function spentInWindow(){
-  var from = now() - 24*3600*1000, sum = 0n;
-  S.spend.forEach(function(s){ if(s.at >= from){ try{ sum += BigInt(s.amount); }catch(e){} } });
-  return sum;
-}
-function evaluate(action){
-  var p = S.policy, checks = [], val = BigInt(action.value||0);
-  function add(name, pass, detail){ checks.push({ name:name, pass:!!pass, detail:detail }); }
-  add('Circuit not paused', !p.paused, p.paused ? 'policy.paused == true' : 'policy.paused == false');
-  var entry = null, i;
-  for(i=0;i<p.allowlist.length;i++){ if(p.allowlist[i].target.toLowerCase() === String(action.target).toLowerCase()){ entry = p.allowlist[i]; break; } }
-  add('Target on allowlist', !!entry, entry ? ('allowlist['+p.allowlist.indexOf(entry)+'] · '+entry.label) : (short(action.target)+' is not one of the '+p.allowlist.length+' allowed targets'));
-  var selOk = !entry || !entry.selectors || entry.selectors.length===0 || entry.selectors.indexOf(String(action.selector).toLowerCase())>=0;
-  add('Selector permitted', selOk, entry && entry.selectors && entry.selectors.length ? (selOk ? action.selector+' ∈ allowed set' : action.selector+' not allowed on this target') : 'no selector restriction for this target');
-  var perTx = val <= BigInt(p.maxPerTx);
-  add('Per-transaction limit', perTx, fmtUnits(val)+' ≤ '+fmtUnits(p.maxPerTx)+' '+CHAIN.sym);
-  var after = spentInWindow() + val, cap = BigInt(p.dailyLimit);
-  add('Rolling 24h volume cap', after <= cap, fmtUnits(after)+' / '+fmtUnits(cap)+' '+CHAIN.sym+' in the last 24h');
-  var expOk = !p.expiry || now() < p.expiry;
-  add('Circuit validity window', expOk, p.expiry ? (expOk ? 'expires '+dayfmt(p.expiry) : 'expired '+dayfmt(p.expiry)) : 'no expiry set');
-  add('Authorized requester', true, 'daemon permit bound to circuit '+short(S.agent.circuitId));
-  var failed = null;
-  for(i=0;i<checks.length;i++){ if(!checks[i].pass){ failed = checks[i]; break; } }
-  return {
-    ok: !failed, checks: checks, passed: checks.filter(function(c){ return c.pass; }).length, total: checks.length,
-    code: failed ? RULE_CODE[failed.name] : null, reason: failed ? failed.detail : null
-  };
-}
-function buildExecutionRequest(action){
-  var sel = String(action.selector||'').slice(0,10);
-  if(sel.length<10) sel = SEL.transfer;
-  return {
-    version: 1,
-    circuitId: S.agent.circuitId,
-    policyId: S.agent.policyId,
-    container: containerAddr(),
-    chainId: CHAIN_ID,
-    target: action.target,
-    selector: sel,
-    calldata: sel + word(BigInt(action.target)).slice(24).padEnd(64,'0'),
-    value: action.value,
-    memo: action.memo,
-    proposedAt: now(),
-    policy: { maxPerTx:S.policy.maxPerTx, dailyLimit:S.policy.dailyLimit, spent24h: spentInWindow().toString() }
-  };
-}
+var policy;
 
 /* =========================================================================
    6. Activity log
@@ -244,10 +187,10 @@ function renderOverview(){
   var h = $('#ov-stats'); if(!h) return;
   h.textContent='';
   var p = S.policy;
-  var spent = spentInWindow(), cap = BigInt(p.dailyLimit);
+  var spent = policy.spentInWindow(), cap = BigInt(p.dailyLimit);
   var bal = BigInt(S.balance.OKB);
   var ok = S.daemon.running;
-  var rv = feeTotal();
+  var rv = feeTotal(S.fees.ledger, S.fees.activation, S.fees.paid);
   h.appendChild(statCard('Container balance', fmtUnits(bal,4)+' '+CHAIN.sym, 'USDT '+fmtUnits(S.balance.USDT,2)+' · '+short(containerAddr()||'not bound')));
   h.appendChild(statCard('Daily volume used', fmtUnits(spent,4)+' / '+fmtUnits(cap,4), 'rolling 24h window · cap '+fmtUnits(p.maxPerTx,3)+' '+CHAIN.sym+' per tx'));
   h.appendChild(statCard('Daemon', ok ? 'RUNNING' : 'STOPPED', (S.daemon.ticks||0)+' ticks · '+S.triggers.length+' triggers', ok?null:null));
@@ -299,7 +242,7 @@ function advanceMarket(){
 }
 function renderMarket(){
   var c = $('#ov-price'); if(!c) return;
-  var p = S.market.price, thr = triggerThreshold();
+  var p = S.market.price, thr = triggerThreshold(S.triggers);
   c.textContent = 'OKB/USD '+p.toFixed(2);
   c.className = 'chip ' + (p<=thr ? 'ok' : '');
   var m = $('#ov-market');
@@ -309,11 +252,6 @@ function renderMarket(){
   }
   drawChart();
 }
-function triggerThreshold(){
-  var t = null;
-  S.triggers.forEach(function(g){ if(g.type==='price' && (t===null || g.threshold<t)) t = g.threshold; });
-  return t===null ? 42 : t;
-}
 function drawChart(){
   var cv = $('#price-chart'); if(!cv || !cv.getContext) return;
   var w = cv.clientWidth || 400, dpr = window.devicePixelRatio || 1, hgt = 130;
@@ -321,7 +259,7 @@ function drawChart(){
   var ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,w,hgt);
   var hist = S.market.history.slice(-90); if(hist.length<2) hist=[S.market.price-0.5, S.market.price];
-  var thr = triggerThreshold();
+  var thr = triggerThreshold(S.triggers);
   var lo = Math.min.apply(null, hist.concat([thr])) - 0.4;
   var hi = Math.max.apply(null, hist.concat([thr])) + 0.4;
   function X(i){ return (i/(hist.length-1))*w; }
@@ -357,7 +295,7 @@ function renderPolicy(){
   mode.textContent = LIVE ? 'LIVE' : 'LOCAL MIRROR';
   mode.className = 'chip '+(LIVE?'live':'');
 
-  var p = S.policy, spent = spentInWindow(), cap = BigInt(p.dailyLimit);
+  var p = S.policy, spent = policy.spentInWindow(), cap = BigInt(p.dailyLimit);
   var pct = cap>0n ? Number((spent*1000n/cap))/10 : 0;
   var win = $('#pol-window'); win.textContent = 'spent '+fmtUnits(spent,3)+' / '+fmtUnits(cap,3);
   var r = $('#pol-rules'); r.textContent='';
@@ -522,9 +460,9 @@ function proposeAndRun(action, sourceLabel){
       action.label+' → '+fmtUnits(action.value)+' '+CHAIN.sym+' to '+short(action.target)+(action.memo?' · "'+action.memo+'"':''),
       { trigger: sourceLabel });
   if(!LIVE){
-    var res = evaluate(action);
+    var res = policy.evaluate(action);
     log(res.ok?'POLICY':'REJECT', res.ok?('Policy circuit approved — '+res.passed+'/'+res.total+' rules') : ('Policy circuit rejected — '+res.code),
-        res.ok ? ('per-tx '+fmtUnits(action.value)+' '+CHAIN.sym+' · 24h used '+fmtUnits(spentInWindow())+' / '+fmtUnits(S.policy.dailyLimit)+' '+CHAIN.sym)
+        res.ok ? ('per-tx '+fmtUnits(action.value)+' '+CHAIN.sym+' · 24h used '+fmtUnits(policy.spentInWindow())+' / '+fmtUnits(S.policy.dailyLimit)+' '+CHAIN.sym)
                : res.reason);
     if(!res.ok) return false;
     return executeDemo(action, res);
@@ -566,7 +504,7 @@ function executeLive(action){
   var item = null;
   Object.keys(pc.abiByName||{}).forEach(function(n){ if(!item && /^(execute|submit|run|dispatch)/i.test(n)) item = pc.abiByName[n]; });
   log('POLICY','Submitting to '+pc.name, item ? ('calling '+item.name+'()') : 'no execute function detected — exporting execution request only');
-  var req = buildExecutionRequest(action);
+  var req = policy.buildExecutionRequest(action);
   S.pending.unshift(req); if(S.pending.length>50) S.pending.length=50; persist(); renderContainer();
   if(!item) return Promise.resolve(false);
   var args = (item.inputs||[]).map(function(inp){
@@ -612,7 +550,7 @@ function tick(){
 }
 function renderOverviewStatsOnly(){
   var h = $('#ov-stats'); if(!h || !h.children.length) return;
-  var spent = spentInWindow(), cap = BigInt(S.policy.dailyLimit);
+  var spent = policy.spentInWindow(), cap = BigInt(S.policy.dailyLimit);
   var cells = h.children;
   if(cells[0]) cells[0].querySelector('.v').textContent = fmtUnits(S.balance.OKB,4)+' '+CHAIN.sym;
   if(cells[1]) cells[1].querySelector('.v').textContent = fmtUnits(spent,4)+' / '+fmtUnits(cap,4);
@@ -624,7 +562,7 @@ function renderOverviewStatsOnly(){
     if(ct.children[1]) ct.children[1].querySelector('.v').textContent = fmtUnits(S.balance.USDT,2)+' USDT';
   }
   var rc = $('#rv-stats');
-  if(rc && rc.children.length){ rc.children[0].querySelector('.v').textContent = fmtUnits(feeTotal(),4)+' USDT'; }
+  if(rc && rc.children.length){ rc.children[0].querySelector('.v').textContent = fmtUnits(feeTotal(S.fees.ledger, S.fees.activation, S.fees.paid),4)+' USDT'; }
   var mc = $('#chip-mode');
   if(mc){ mc.textContent = (S.daemon.running?'● daemon live · ':'')+(LIVE?'LIVE CONTRACTS':'DEMO SIMULATION'); mc.className = 'chip '+(LIVE?'live':'warn'); }
 }
@@ -639,13 +577,6 @@ function stopDaemon(){
   log('CONFIG','Daemon stopped','state persisted — a reload would resume it if it were still running');
   persist(); renderDaemon(); renderOverviewStatsOnly(); renderStart();
 }
-function feeTotal(){
-  var sum = 0n;
-  S.fees.ledger.forEach(function(l){ try{ sum += BigInt(l.amount); }catch(e){} });
-  if(S.fees.paid) sum += BigInt(S.fees.activation);
-  return sum;
-}
-
 /* =========================================================================
    10. Container view
    ========================================================================= */
@@ -711,7 +642,7 @@ function renderContainer(){
 function renderRevenue(){
   var h = $('#rv-stats'); if(!h) return;
   h.textContent='';
-  var total = feeTotal();
+  var total = feeTotal(S.fees.ledger, S.fees.activation, S.fees.paid);
   var execVol = 0n;
   S.activity.forEach(function(e){ if(e.kind==='EXEC' && e.action) { try{ execVol += BigInt(e.action.value); }catch(err){} } });
   h.appendChild(statCard('Fees credited', fmtUnits(total,4)+' USDT', 'flows to the container the user controls'));
@@ -1689,7 +1620,7 @@ function boot(){
   $('#btn-nudge').onclick = function(){ S.market.price = Math.max(20, S.market.price-0.30); advanceMarket(); tick(); renderMarket(); };
   $('#btn-demo-happy').onclick = function(){
     if(!S.daemon.running) startDaemon();
-    S.market.price = Math.min(S.market.price, triggerThreshold()-0.05);
+    S.market.price = Math.min(S.market.price, triggerThreshold(S.triggers)-0.05);
     advanceMarket(); tick();
     log('CONFIG','Demo · happy path','trigger → policy approval → container execution reproduced end to end');
     renderOverview(); renderFeed();
@@ -1749,7 +1680,7 @@ function boot(){
   $('#btn-evaluate').onclick = function(){
     var action;
     try{ action = currentSimAction(); }catch(err){ toast('Invalid amount'); return; }
-    var res = evaluate(action);
+    var res = policy.evaluate(action);
     var out = $('#sim-out'); out.textContent=''; out.appendChild(policyResultNode(res, action));
     log(res.ok?'POLICY':'REJECT', 'Simulated policy check · '+(res.ok?'approved':'rejected'),
         res.ok? (res.passed+'/'+res.total+' rules passed for '+short(action.target)) : (res.code+': '+res.reason));
@@ -1757,7 +1688,7 @@ function boot(){
   $('#btn-preview-calldata').onclick = function(){
     var action;
     try{ action = currentSimAction(); }catch(err){ toast('Invalid amount'); return; }
-    var rq = buildExecutionRequest(action);
+    var rq = policy.buildExecutionRequest(action);
     var out = $('#sim-out'); out.textContent='';
     var box = mk('div','card');
     box.appendChild(mk('h3',null,'Execution request (what the daemon would submit)'));

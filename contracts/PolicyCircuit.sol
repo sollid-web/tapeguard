@@ -154,6 +154,7 @@ contract PolicyCircuit {
 
         uint256 alreadySpent = _spentToday(agent);
         if (alreadySpent + value > dailyLimit) return (false, "DAILY_LIMIT");
+        if (_actionsToday(agent) >= maxActionsPerDay) return (false, "ACTION_LIMIT");
 
         return (true, "OK");
     }
@@ -181,12 +182,7 @@ contract PolicyCircuit {
     /// @notice Records one execution. Called by the agent container in the same
     ///         transaction as the action itself, bound to the container's execution
     ///         nonce so a single approval cannot be replayed or inflated offline.
-    function recordExecution(
-        uint256 agentNonce,
-        uint256 value,
-        address token,
-        uint256 tokenAmount
-    ) external onlyAgent {
+    function recordExecution(uint256 agentNonce, uint256 value, address token, uint256 tokenAmount) external onlyAgent {
         if (agentNonce != lastNonce[msg.sender] + 1) revert NonceMismatch();
         lastNonce[msg.sender] = agentNonce;
 
@@ -260,27 +256,33 @@ contract PolicyCircuit {
     ///         replays TargetSet / FunctionSet / PlainTransferSet / AgentSet /
     ///         TokenLimitSet events from `whitelistHash`'s seed to rebuild both hashes.
     function computeCommitment() external view returns (bytes32) {
-        return
-            keccak256(
-                abi.encode(
-                    CIRCUIT_ID,
-                    VERSION,
-                    revision,
-                    paused,
-                    maxPerAction,
-                    dailyLimit,
-                    maxActionsPerDay,
-                    whitelistHash,
-                    tokenHash
-                )
-            );
+        return keccak256(
+            abi.encode(
+                CIRCUIT_ID,
+                VERSION,
+                revision,
+                paused,
+                maxPerAction,
+                dailyLimit,
+                maxActionsPerDay,
+                whitelistHash,
+                tokenHash
+            )
+        );
     }
 
     /// @notice Everything that pins the policy in one call.
     function policyDigest()
         external
         view
-        returns (bytes32 circuitId, bytes32 commitment_, bytes32 whitelistHash_, bytes32 tokenHash_, uint256 revision_, string memory version_)
+        returns (
+            bytes32 circuitId,
+            bytes32 commitment_,
+            bytes32 whitelistHash_,
+            bytes32 tokenHash_,
+            uint256 revision_,
+            string memory version_
+        )
     {
         return (CIRCUIT_ID, commitment, whitelistHash, tokenHash, revision, VERSION);
     }
@@ -353,10 +355,7 @@ contract PolicyCircuit {
 
     /// @notice Sets the per-action and daily limit of one ERC-20 token. Disabling a
     ///         token (or never enabling it) makes the container refuse to move it.
-    function setTokenLimit(address token, bool enabled, uint256 maxPerAction_, uint256 dailyLimit_)
-        external
-        onlyOwner
-    {
+    function setTokenLimit(address token, bool enabled, uint256 maxPerAction_, uint256 dailyLimit_) external onlyOwner {
         if (token == address(0)) revert ZeroAddress();
         if (enabled && (maxPerAction_ == 0 || dailyLimit_ < maxPerAction_)) revert InvalidLimits();
         _tokenRules[token] = TokenRule({enabled: enabled, maxPerAction: maxPerAction_, dailyLimit: dailyLimit_});
@@ -376,6 +375,7 @@ contract PolicyCircuit {
                 paused,
                 maxPerAction,
                 dailyLimit,
+                maxActionsPerDay,
                 whitelistHash,
                 tokenHash
             )
@@ -413,6 +413,10 @@ contract PolicyCircuit {
 
     function _tokenSpentToday(address agent, address token) private view returns (uint256) {
         return _tokenSpendDay[agent][token] == _day() ? _tokenSpent[agent][token] : 0;
+    }
+
+    function _actionsToday(address agent) private view returns (uint256) {
+        return actionDay[agent] == _day() ? actionsToday[agent] : 0;
     }
 
     function _selector(bytes calldata data) private pure returns (bytes4 s) {

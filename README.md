@@ -17,6 +17,51 @@ allow, spend the fees it collected for you, keep going after you stop it, or wid
 What it cannot promise: profit. It is a trader, not a savings account — the limits cap the damage, not
 the risk.
 
+An always-on crypto trading agent whose limits are enforced on-chain, ensuring a stolen keeper key can never drain your funds.
+
+💡 The Problem
+
+To trade automatically, a bot normally needs access to your private key. That key represents unlimited power: one leak or server compromise can drain your entire treasury. Furthermore, traditional bots operate in a black box—you can never explicitly prove on-chain what the bot was actually authorized to do versus what it chose to do.
+
+🛡️ Our Solution
+
+TapeGuardian separates execution power from funding custody. Instead of trusting an all-powerful key, your rules are hardcoded into an immutable Policy Circuit on the blockchain.
+The background automation runs using a low-power "Keeper" key that acts like a delivery courier. It can only push transactions that your rulebook explicitly allows. If an attacker compromises your server and steals the keeper key, they still cannot spend past your daily limit, swap for unapproved tokens, or interact with un-whitelisted decentralized exchanges. Your funds stay safe inside a keyless smart contract vault.
+
+🏗️ Core Architecture & How It Works
+
+   ┌─────────────────┐       Queries       ┌──────────────────┐
+   │ Always-On Server│ ──────────────────> │  Policy Circuit  │
+   │ (Cloudflare SDK)│                     │ (On-Chain Rules) │
+   └────────┬────────┘                     └────────┬─────────┘
+            │                                       │
+     Submits│Approved                               │Validates Inside
+    Proposal│Transaction                            │Same Tx
+            ▼                                       ▼
+   ┌─────────────────┐                     ┌──────────────────┐
+   │   Keeper Key    │ ──────────────────> │ Agent Container  │
+   │(Low-power Relay)│                     │(Keyless Account) │
+   └─────────────────┘                     └────────┬─────────┘
+                                                    │ Executes
+                                                    ▼
+                                           [Whitelisted DEX Swap]
+1. Policy Layer (PolicyCircuit): An immutable, publicly verifiable rule engine deployed on X Layer. It dictates the maximum allowed size per transaction, a rolling 24-hour volume cap, whitelist expiration, and authorized target/selector addresses (e.g., specific DEX routers). It features a pure check() view function allowing cost-free transaction dry-runs.
+2. Execution Layer (AgentContainer): A keyless smart contract account that holds your assets. It contains no private key. It handles requests by calling the Policy Circuit inside the transaction window, ensuring the rule check and the trade succeed or fail together.
+3. The Autonomous Daemon: An always-on Cloudflare Worker triggered by a minute-by-minute cron job. It continuously monitors market conditions (e.g., OKB/USD price drift) and builds execution proposals to feed to the container using its low-power keeper key.
+
+🛠️ X Layer Integration & Tech Stack
+
+• Blockchain Network: Deployed entirely on X Layer Mainnet / Testnet (Chain ID 196).
+• Smart Contracts: Formulated in Solidity using robust, security-first access control boundaries to prevent unauthorized parameter overrides.
+• Off-Chain Automation: Built using Cloudflare Workers for high-availability, low-latency background cron execution and edge-routed state management.
+• Front-End & Tools: A highly responsive dashboard featuring a comprehensive Policy Simulator, live activity/decision logs, single-click JSON evidence exporting, and an integrated deployment control plane featuring an on-chain kill switch.
+
+🌟 Key Features & Benefits
+
+• 🌙 24/7 Hands-Free Rebalancing: Keeps your asset weights tightly aligned to target percentages (e.g., 60% OKB / 40% USDT) while you sleep.
+• 🛑 Dual-Layer Circuit Breakers: Pause your daemon with one click in the web interface, or engage a permanent on-chain kill switch directly from your owner wallet if your server infrastructure is completely compromised.
+• 🧾 Absolute Transparency: Every market tick, execution approval, and contract rejection is logged in plain English, generating clear, cryptographic proof of the agent's behavior.
+• 📈 Built-In Commercial Model: Supports configurable activation and performance fees (in basis points) routed automatically back to the container under the user's explicit control.
 ## The three layers, technically
 
 | Layer | What it is | Where it lives |

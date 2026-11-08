@@ -478,8 +478,8 @@ export async function minOutFromPool(env, cfg, amountIn, path, feedOut, outDecim
     return { error: 'router returned no quote - refusing to size the trade from the feed alone' };
   }
   const diff = feedOut > onchain ? feedOut - onchain : onchain - feedOut;
-  const deviationBps = Number((diff * 10000n) / onchain);
   if (onchain <= 0n) return { error: 'zero-liquidity pool quote - refusing trade' };
+  const deviationBps = Number((diff * 10000n) / onchain);
   if (deviationBps > cfg.maxFeedDeviationBps) {
     return { error: `feed deviates from the pool by ${deviationBps} bps (max ${cfg.maxFeedDeviationBps}) - refusing to trade` };
   }

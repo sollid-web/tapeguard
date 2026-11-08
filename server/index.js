@@ -48,8 +48,14 @@ function allowList(env) {
 /**
  * Per-request CORS. The old wildcard let any page on the internet call this API with
  * a stolen bearer token and read the answer, so browser origins are now allow-listed
- * and the API refuses to serve a browser until APP_ORIGINS is set. Server-to-server
- * callers (cron, curl, the page's own build step) send no Origin and always pass.
+ * and the API refuses to serve a browser until APP_ORIGINS is set.
+ *
+ * Requests that carry no Origin header are server-to-server calls (cron, curl, the
+ * page's own build step). They bypass CORS headers entirely — browsers always send
+ * Origin on cross-origin fetches, so a request without one cannot be browser-issued.
+ * Access control for those callers is enforced by the DAEMON_SECRET and owner-session
+ * checks further down the handler; the absence of Origin is not itself a credential.
+ *
  * Refusals still echo the origin, so the dashboard can read the error text.
  */
 function corsFor(request, env) {
@@ -61,8 +67,9 @@ function corsFor(request, env) {
   };
   const origin = (request.headers.get('Origin') || '').replace(/\/+$/, '');
   if (!origin) {
-    headers['Access-Control-Allow-Origin'] = '*';
-    return { headers, allowed: true, reason: '' };
+    // No Origin → not a browser request; skip CORS headers entirely.
+    // Authentication is handled separately by DAEMON_SECRET / owner session.
+    return { headers: {}, allowed: true, reason: '' };
   }
   const list = allowList(env);
   headers['Access-Control-Allow-Origin'] = origin;
@@ -296,7 +303,13 @@ async function handle(request, env, ctx) {
     const gate = await mayTick(request, env);
     if (!gate.ok) return bad('tick requires the owner session or the daemon secret', 401);
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-    if (gate.by !== 'owner') {
+    if (gate.by === 'owner') {
+      // Owner sessions get a generous per-IP allowance (120/min) but are still
+      // rate-limited: a stolen token or a looping dashboard cannot hammer the
+      // on-chain policy circuit or flood the queue without bound.
+      const attempt = await bumpAttempt(db, 'tick-owner:' + ip, 120, 60);
+      if (attempt.blocked) return bad('too many ticks from this address', 429);
+    } else {
       const attempt = await bumpAttempt(db, 'tick:' + ip, 30, 60);
       if (attempt.blocked) return bad('too many ticks from this address', 429);
     }

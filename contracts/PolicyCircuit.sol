@@ -421,6 +421,8 @@ contract PolicyCircuit {
 
     function _selector(bytes calldata data) private pure returns (bytes4 s) {
         if (data.length < 4) return bytes4(0);
-        s = bytes4(data[0]) | (bytes4(data[1]) >> 8) | (bytes4(data[2]) >> 16) | (bytes4(data[3]) >> 24);
+        assembly {
+            s := calldataload(data.offset)
+        }
     }
 }

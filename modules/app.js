@@ -791,7 +791,7 @@ function renderAutonomy(){
 
   if(!API){
     mode.textContent = 'NO SERVER'; mode.className = 'chip warn';
-    note('', 'No 24/7 server is deployed with this page yet, so nothing can run while you are away. Think of the Daemon tab as a practice run inside your browser: close the tab and it stops. The real agent needs a small program running on a server — deploy it (it holds the cron tick, your rules and the low-power keeper key) and this panel becomes the always-on agent that trades while your phone is off.');
+    note('', 'No 24/7 server is deployed with this page yet, so nothing can run while you are away. Think of the Daemon tab as a practice run inside your browser: close the tab and it stops. The real agent needs a server and a separately operated signer service — the server runs cron and rules, while the signer holds the relayer key.');
     note('ok', 'You can still do everything else today: set your rules in the Policy circuit tab, watch the cycle in the Daemon tab, and read the plain-language explanation on Start here.');
     [['Daemon','offline','deploy the server'],['Agent value','—','no chain reads'],['OKB weight','—','no strategy running'],['Queue','—','nothing pending']].forEach(function(r){
       stats.appendChild(statCard(r[0], r[1], r[2]));
@@ -993,13 +993,13 @@ function renderRelayer(){
     return;
   }
   var r = SERVER.status.relayer || {};
-  kvRow(host, 'Keeper address', r.address || 'none (no RELAYER_KEY secret)');
-  kvRow(host, 'Signer self-test', r.selfTest ? 'passed' : ('failed — ' + (r.reason || 'keys disabled')));
+  kvRow(host, 'Keeper address', r.address || 'not configured');
+  kvRow(host, 'External signer', r.selfTest ? 'available' : ('unavailable — ' + (r.reason || 'not configured')));
   kvRow(host, 'Authorised on container', r.authorised === null ? 'unknown' : (r.authorised ? 'yes — can submit approved actions' : 'no — authorise it once from your TapeOut container'));
-  kvRow(host, 'Custody', 'none — it can only push policy-approved actions');
+  kvRow(host, 'Custody', 'key held externally; on-chain policy limits execution');
   if(chip){
     var good = r.selfTest && r.authorised;
-    chip.textContent = good ? 'READY' : (r.configured ? 'NOT READY' : 'NO KEY');
+    chip.textContent = good ? 'READY' : (r.configured ? 'NOT READY' : 'NO SIGNER');
     chip.className = 'chip ' + (good ? 'ok' : 'warn');
   }
 }

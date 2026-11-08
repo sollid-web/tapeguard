@@ -50,7 +50,8 @@ allow, spend the fees it collected for you, keep going after you stop it, or wid
 What it cannot promise: profit. It is a trader, not a savings account — the limits cap the damage, not
 the risk.
 
-An always-on crypto trading agent whose limits are enforced on-chain, ensuring a stolen keeper key can never drain your funds.
+An always-on crypto trading agent with on-chain limits. A compromised keeper or signer may still
+execute policy-approved trades and cause losses within the configured limits.
 
 💡 The Problem
 
@@ -58,8 +59,13 @@ To trade automatically, a bot normally needs access to your private key. That ke
 
 🛡️ Our Solution
 
-TapeGuardian separates execution power from funding custody. Instead of trusting an all-powerful key, your rules are enforced by the Policy Circuit on the blockchain. The contract owner is fixed at deployment, but the policy settings remain owner-configurable and are not immutable.
-The background automation runs using a low-power "Keeper" key that acts like a delivery courier. It can only push transactions that your rulebook explicitly allows. If an attacker compromises your server and steals the keeper key, they still cannot spend past your daily limit, swap for unapproved tokens, or interact with un-whitelisted decentralized exchanges. Your funds stay safe inside a keyless smart contract vault.
+TapeGuardian separates transaction signing from the Worker and enforces execution rules in the
+Policy Circuit on chain. The contract owner is fixed at deployment, but policy settings remain
+owner-configurable and are not immutable.
+The background Worker requests signatures from a separate signer service and broadcasts approved
+transactions. On-chain checks restrict the relayer to configured actions and limits; a compromised
+Worker or signer can still execute allowed trades and cause losses within those limits. The
+AgentContainer has no private key, but it does hold the assets being managed.
 
 🏗️ Core Architecture & How It Works
 
@@ -80,7 +86,7 @@ The background automation runs using a low-power "Keeper" key that acts like a d
                                            [Whitelisted DEX Swap]
 1. Policy Layer (PolicyCircuit): A non-upgradeable smart-contract rule engine deployed on X Layer. Its owner is fixed at deployment, but policy data such as limits, allowlists, and pause state remain owner-configurable. It dictates the maximum allowed size per transaction, a rolling 24-hour volume cap, whitelist expiration, and authorized target/selector addresses (e.g., specific DEX routers). It features a pure check() view function allowing cost-free transaction dry-runs.
 2. Execution Layer (AgentContainer): A keyless smart contract account that holds your assets. It contains no private key. It handles requests by calling the Policy Circuit inside the transaction window, ensuring the rule check and the trade succeed or fail together.
-3. The Autonomous Daemon: An always-on Cloudflare Worker triggered by a minute-by-minute cron job. It continuously monitors market conditions (e.g., OKB/USD price drift) and builds execution proposals to feed to the container using its low-power keeper key.
+3. The Autonomous Daemon: An always-on Cloudflare Worker triggered by a minute-by-minute cron job. It monitors market conditions (e.g., OKB/USD price drift), checks proposed calls against the policy, asks the external signer to sign the transaction, and broadcasts it.
 
 🛠️ X Layer Integration & Tech Stack
 
@@ -126,15 +132,17 @@ Nobody has to be present for a trade or a rebalance.
 The container's `execute()` accepts **the owner** (the user's TapeOut circuit container) **or an
 authorised relayer**. The daemon is that relayer:
 
-- It signs with `RELAYER_KEY`, a keeper key that lives only in the Worker's secrets.
+- It asks a separate HTTPS signer service to sign transactions. The private key is not stored in
+  the Worker; the Worker broadcasts the returned signed transaction through its configured RPC.
 - It can *only* push an action the policy circuit approves **at that moment**, inside the per-action
   and daily limits.
 - It **cannot** withdraw, change the policy, unpause the agent, move the activation fee, or authorise
   another relayer. Those are all `onlyOwner`.
-- Losing the key stops the agent. It never loses the money. Revoking it is one `setRelayer(x,false)`.
+- The relayer has no owner privileges, but a compromised signer can still execute actions allowed by
+  the on-chain policy. Revocation remains owner-controlled through `setRelayer(x,false)`.
 
-This is the whole point: autonomous execution without custody. Compare with a bot that holds a funded
-private key — one leak, treasury gone.
+This separates transaction-key custody from the Worker; it does not remove the need to secure the
+signer or the on-chain execution policy.
 
 ## Rebalancing (the real problem it solves)
 
@@ -191,45 +199,55 @@ The guard threshold is 1–150 bps.
 7. Fund the container (plain transfer), then `activate()` (permissionless, also from the page) if you
    use the activation-fee model.
 
-## Server secrets (server view → Secrets)
+## Server configuration (server view → Variables and Secrets)
 
-| Secret | Purpose |
+| Name | Type | Purpose |
 |---|---|
-| `ADMIN_PASSWORD` | Unlocks the control plane in the Autonomy tab. Never in any file. |
-| `RELAYER_KEY` | Keeper key of the address you authorised with `setRelayer`. Holds no funds. |
-| `RPC_URL` | X Layer RPC endpoint (a keyed endpoint stays server-side, never in the page). |
-| `DAEMON_SECRET` | Shared secret for external cron hits of `POST /api/tick`. |
-| `PRICE_URL` | Optional JSON feed `{"okb":42.5,"usdt":1.0}` instead of CoinGecko. |
-| `APP_ORIGINS` | **Required for browser access.** Comma-separated list of the origins this dashboard is served from, e.g. `https://your-page.gateway`. Without it the Worker refuses every browser request (403) instead of answering `Access-Control-Allow-Origin: *` to the whole internet. `curl`, cron and the page's server-side callers send no `Origin` and are unaffected. |
+| `ADMIN_PASSWORD` | Secret | Unlocks the control plane in the Autonomy tab. Never in any file. |
+| `SIGNER_URL` | Variable | Base HTTPS URL for the external transaction-signing service. |
+| `SIGNER_TOKEN` | Secret | Bearer credential for the external signer. |
+| `RELAYER_ADDRESS` | Variable | Public address authorized with `setRelayer` on the container. |
+| `RPC_URL` | Secret | X Layer RPC endpoint (a keyed endpoint stays server-side, never in the page). |
+| `DAEMON_SECRET` | Secret | Shared secret for external cron hits of `POST /api/tick`. |
+| `PRICE_URL` | Secret | Optional JSON feed `{"okb":42.5,"usdt":1.0}` instead of CoinGecko. |
+| `APP_ORIGINS` | Variable | **Required for browser access.** Comma-separated list of the origins this dashboard is served from, e.g. `https://your-page.gateway`. Without it the Worker refuses every browser request (403) instead of answering `Access-Control-Allow-Origin: *` to the whole internet. `curl`, cron and the page's server-side callers send no `Origin` and are unaffected. |
+
+The signer service must implement authenticated `GET /health` (returning
+`{"ok":true,"address":"0x..."}`) and `POST /sign`. The signing request body is
+`{"type":"eip1559"|"legacy","transaction":{...}}`, with transaction quantities encoded as hex strings;
+the response is `{"address":"0x...","rawTransaction":"0x..."}`. The Worker verifies the signer's
+reported address and raw-transaction encoding, then broadcasts the signed bytes. The signer must
+independently restrict chain IDs, destination container addresses, outer transaction value, allowed
+calldata, gas and fee bounds, and access to the signing operation. A generic unrestricted signing
+oracle would only relocate the hot key, not fix the security risk.
 
 The control plane therefore needs one more step after publishing: copy the URL you published to,
 paste it into `APP_ORIGINS`, and redeploy. `GET /api/health` reports `cors.locked` and the accepted
 origins so you can check it from a browser.
 
-If `RELAYER_KEY` is missing the daemon still decides, checks the circuit and **queues** the approved
+If the signer is missing or unavailable the daemon still decides, checks the circuit and **queues** the approved
 calldata — it just cannot submit. Nothing is lost: the next cycle re-validates every queued row against
-the circuit on chain and sends it as soon as a keeper is configured (or the kill switch is released),
+the circuit on chain and sends it as soon as the signer is available (or the kill switch is released),
 and a row older than `maxQueueAgeS` expires instead of being sent at a stale price.
 
-### Keeper key rotation and incident response
+### Signer key rotation and incident response
 
-The keeper is a hot key and remains an operational trust risk even though it cannot bypass on-chain
-policy. Keep it separate from owner keys, fund it only with gas, restrict access to Worker secrets,
-and monitor container activity. For planned rotation, generate a replacement keeper key in a secure
-environment, authorize its address with the owner-controlled `AgentContainer.setRelayer(newAddress,
-true)`, update the Worker `RELAYER_KEY` secret through Cloudflare's secret-management interface, verify
-the Worker reports the new relayer as authorized and can submit a harmless policy-approved action,
-then revoke the old address with `setRelayer(oldAddress, false)`. For suspected compromise, pause the
-agent and revoke the old address immediately; rotate the Worker secret, authorize the replacement,
-verify the new setup, and only then unpause. Never put either private key in source control, `.env`
-files, logs, or this runbook. On-chain revocation is covered by a Foundry regression test; this
-repository cannot verify or perform a live Cloudflare secret rotation.
+The relayer private key must remain in the external signing system, never in Worker variables,
+secrets, source control, `.env` files, logs, or this runbook. Restrict signing-service access, fund the
+relayer only with gas, monitor container activity, and retain owner-controlled on-chain revocation.
+For planned rotation, create the replacement key in the signing system, authorize its address with
+`AgentContainer.setRelayer(newAddress, true)`, update `RELAYER_ADDRESS` and the signer's configured
+identity, verify `/api/health` and `/api/status` report the expected authorized address, then revoke
+the old address with `setRelayer(oldAddress, false)`. For suspected compromise, pause the agent and
+revoke the old relayer immediately; configure and verify the replacement before unpausing. The
+repository contains the Worker-side signer protocol only; no signer service, key rotation, or live
+Cloudflare configuration has been deployed or verified.
 
 ## API (all CORS-enabled, JSON)
 
 | Endpoint | Auth | Purpose |
 |---|---|---|
-| `GET /api/health` | — | keccak + signer self-tests, which secrets are configured |
+| `GET /api/health` | — | keccak self-test, external signer availability, and configured bindings |
 | `GET /api/status` | — | daemon state, holdings, drift, circuit, agent, relayer, last log |
 | `GET /api/log`, `GET /api/queue` | — | audit trail |
 | `POST /api/tick` | owner or daemon secret | force one cycle |
@@ -281,8 +299,8 @@ What holds **today**, on chain, and is what the page shows:
   cannot move the whole ERC-20 balance), plain-transfer switch, target and selector whitelist.
 - Service fees (`accruedFees`) are reserved: an execution can never spend fee revenue, and
   `withdrawFees` cannot be bricked by a trade.
-- Every execution is recorded against the container's own incrementing nonce, so a leaked keeper key
-  cannot replay, inflate or back-date a spend, and is revoked with one `setRelayer(keeper, false)`.
+- Every execution is recorded against the container's own incrementing nonce, limiting replay and
+  back-dating; the relayer is revoked with `setRelayer(keeper, false)`.
 - The daemon fingerprints the approved action and re-derives it immediately before signing, so the
   envelope it broadcasts is byte-identical to the call the circuit approved.
 - Control of the container is handover-able in two steps (`transferOwner`, then `acceptOwner` from the
@@ -305,7 +323,8 @@ Known limits, stated instead of implied:
 - A whitelisted contract can spend any ERC-20 allowance that exists, so the daemon approves exactly
   the amount the swap consumes and resets the allowance to zero afterwards; whitelist the router's
   swap selectors rather than arbitrary contracts, and never turn on `anyFunction` for a target.
-- A leaked keeper key can still move up to the circuit's caps each day — that is the point of the caps,
-  not a bug. Revoke it with `setRelayer(keeper, false)`.
-- The keeper holds gas only; top it up, it cannot withdraw or reconfigure anything.
+- A compromised Worker or signer can still execute actions within the circuit's caps and whitelists.
+  Revoke the relayer with `setRelayer(keeper, false)`.
+- The relayer wallet needs gas to submit transactions; it cannot call owner-only withdrawal or
+  reconfiguration functions.
 - The daemon is only as available as Cloudflare's cron; a missed cycle costs time, never funds.

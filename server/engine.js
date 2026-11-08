@@ -12,7 +12,7 @@ import { encodeAddress, encodeUint, encodeCall, strip, formatUnits } from './abi
 import { selector, keccakHex } from './keccak.js';
 import * as chain from './chain.js';
 import { currentPrices } from './oracle.js';
-import { addressFromPrivateKey, isPrivateKey, selfTest as signerSelfTest, signTransaction, signDynamicFee } from './wallet.js';
+import { signerConfigured, signerStatus, signTransactionRemotely } from './signer.js';
 
 const DAY = 86400;
 const LOCK_TTL = 25;
@@ -255,7 +255,7 @@ export async function expireQueue(db, cfg) {
  * here, so a queued action can never bypass a policy change made in the meantime.
  */
 export async function drainQueue(env, cfg, limit = 3, nonceContext = null, lease = null) {
-  if (!cfg.armed || !env.RELAYER_KEY) return 0;
+  if (!cfg.armed || !signerConfigured(env)) return 0;
   const db = env.DB;
   const now = Math.floor(Date.now() / 1000);
   const maxAge = Number(cfg.maxQueueAgeS || 900);
@@ -494,7 +494,6 @@ export async function minOutFromPool(env, cfg, amountIn, path, feedOut, outDecim
 
 async function submitStep(env, cfg, step, ruleId, opts = {}) {
   const db = env.DB;
-  const key = env.RELAYER_KEY;
   // opts.queueId: the action comes from a queued row (drainQueue), so the row is
   // updated in place instead of a second row being written for the same action.
   const queueId = opts.queueId || null;
@@ -508,12 +507,11 @@ async function submitStep(env, cfg, step, ruleId, opts = {}) {
 
   // 1. gate: kill switch, signer, authorisation, activation
   if (!cfg.armed) return skip('kill switch is on (armed=0)');
-  if (!key || !isPrivateKey(key)) return skip('no relayer key configured (RELAYER_KEY secret)');
 
-  const selfTest = await signerSelfTest();
-  if (!selfTest.ok) return skip('signer self-test failed: ' + selfTest.reason);
+  const selfTest = await signerStatus(env);
+  if (!selfTest.ok) return skip('external signer unavailable: ' + selfTest.reason);
 
-  const relayer = addressFromPrivateKey(key);
+  const relayer = selfTest.address;
   if (!(await chain.isRelayer(env, cfg.container, relayer))) {
     return skip(`relayer ${relayer} not authorised on the container (owner-only setRelayer)`);
   }
@@ -601,10 +599,10 @@ async function submitStep(env, cfg, step, ruleId, opts = {}) {
     let kind = 'eip1559';
     let raw;
     try {
-      raw = await signDynamicFee(tx, key);
+      raw = await signTransactionRemotely(env, tx, 'eip1559');
     } catch {
       kind = 'legacy';
-      raw = await signTransaction({ ...tx, gasPrice: maxFee }, key);
+      raw = await signTransactionRemotely(env, { ...tx, gasPrice: maxFee }, 'legacy');
     }
     let hash;
     try {
@@ -622,7 +620,7 @@ async function submitStep(env, cfg, step, ruleId, opts = {}) {
         // node rejected the type-2 envelope: retry once as a legacy transaction
         kind = 'legacy';
         try {
-          hash = await chain.sendRaw(env, await signTransaction({ ...tx, gasPrice: maxFee }, key));
+          hash = await chain.sendRaw(env, await signTransactionRemotely(env, { ...tx, gasPrice: maxFee }, 'legacy'));
         } catch (legacyError) {
           const observed = await chain.nonceOf(env, relayer).catch(() => reservedNonce);
           if (observed > reservedNonce) {
@@ -986,7 +984,7 @@ export async function statusSnapshot(env) {
     db.prepare("SELECT COUNT(*) AS n FROM queue WHERE status = 'pending'").first(),
     db.prepare("SELECT status, COUNT(*) AS n FROM queue GROUP BY status").all(),
     currentPrices(env, db).catch(() => null),
-    signerSelfTest().catch(() => ({ ok: false, address: null, reason: 'self-test crashed' })),
+    signerStatus(env),
   ]);
 
   let holdings = null;
@@ -997,8 +995,8 @@ export async function statusSnapshot(env) {
     holdings = await portfolio(env, cfg, prices).catch(() => null);
     circuit = cfg.policy ? await chain.policyView(env, cfg.policy, cfg.container).catch(() => null) : null;
     agent = await chain.containerInfo(env, cfg.container).catch(() => null);
-    if (env.RELAYER_KEY && isPrivateKey(env.RELAYER_KEY)) {
-      relayerAuthorised = await chain.isRelayer(env, cfg.container, addressFromPrivateKey(env.RELAYER_KEY)).catch(() => null);
+    if (signer.address) {
+      relayerAuthorised = await chain.isRelayer(env, cfg.container, signer.address).catch(() => null);
     }
   }
 
@@ -1013,7 +1011,7 @@ export async function statusSnapshot(env) {
       selfTest: signer.ok,
       reason: signer.reason || '',
       authorised: relayerAuthorised,
-      configured: Boolean(env.RELAYER_KEY),
+      configured: signerConfigured(env),
     },
     daemon: {
       lastTick,

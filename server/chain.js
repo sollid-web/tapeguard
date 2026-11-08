@@ -1,6 +1,6 @@
 // Chain access for the daemon. Everything is read-only JSON-RPC against the
 // endpoint in the secret RPC_URL; the only write path is eth_sendRawTransaction
-// with a transaction already signed by the relayer (see ./wallet.js).
+// with a transaction signed by the external signer (see ./signer.js).
 
 import {
   encodeAddress, encodeUint, encodeCall, encodeCallWithBytes, decodeWords,

@@ -11,8 +11,9 @@ BigInt.prototype.toJSON = function() { return this.toString(); }
 //
 // Secrets (server view -> Secrets):
 //   ADMIN_PASSWORD  unlocks the control plane (never in any file)
-//   RELAYER_KEY     key of the keeper address authorised with setRelayer() on the
-//                   container. It holds no funds and cannot withdraw or reconfigure.
+//   SIGNER_URL      HTTPS base URL for the external transaction-signing service
+//   SIGNER_TOKEN    bearer token for the external signer
+//   RELAYER_ADDRESS address authorized with setRelayer() on the container
 //   RPC_URL         X Layer RPC endpoint (keyed endpoints stay here, never in a page)
 //   DAEMON_SECRET   shared secret for external cron hits of /api/tick
 //   PRICE_URL       optional JSON feed {"okb":42.5,"usdt":1.0} instead of CoinGecko
@@ -22,7 +23,7 @@ BigInt.prototype.toJSON = function() { return this.toString(); }
 
 import { isAddress, isData } from './abi.js';
 import { selfTest as keccakSelfTest } from './keccak.js';
-import { selfTest as signerSelfTest, addressFromPrivateKey, isPrivateKey } from './wallet.js';
+import { signerStatus } from './signer.js';
 import { rpcConfigured } from './chain.js';
 import {
   DEFAULTS, getConfig, setConfig, statusSnapshot, tick, logRow, recentLog, typed,
@@ -178,7 +179,7 @@ async function handle(request, env, ctx) {
   /* ---------------------------------------------------------------- health */
   if (path === '/api/health' && method === 'GET') {
     const keccak = keccakSelfTest();
-    const signer = await signerSelfTest().catch(() => ({ ok: false, reason: 'crash' }));
+    const signer = await signerStatus(env);
     return json({
       ok: true,
       service: 'tapeguardian-daemon',
@@ -192,7 +193,9 @@ async function handle(request, env, ctx) {
       sessionTtl: SESSION_TTL_S,
       secrets: {
         adminPassword: Boolean(env.ADMIN_PASSWORD),
-        relayerKey: Boolean(env.RELAYER_KEY),
+        signerUrl: Boolean(env.SIGNER_URL),
+        signerToken: Boolean(env.SIGNER_TOKEN),
+        relayerAddress: Boolean(env.RELAYER_ADDRESS),
         daemonSecret: Boolean(env.DAEMON_SECRET),
         priceUrl: Boolean(env.PRICE_URL),
       },
@@ -202,7 +205,7 @@ async function handle(request, env, ctx) {
 
   /* ------------------------------------------------------------------- rpc */
   // Read-only JSON-RPC proxy so the published page can read chain state without a
-  // wallet. It never spends the keeper key: methods are allow-listed, batches are
+  // wallet. It never signs or sends transactions: methods are allow-listed, batches are
   // capped, and eth_getLogs is limited to a small block range. Writes cannot pass.
   if (path === '/api/rpc' && method === 'POST') {
     if (!env.RPC_URL) return bad('no RPC_URL configured on the server', 503);

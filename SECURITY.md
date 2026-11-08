@@ -8,7 +8,7 @@ it does not verify production infrastructure, Cloudflare secrets, D1 migrations,
 
 | ID | Severity | Finding | Status |
 |---|---|---|---|
-| M-01 | Medium | The Worker uses a hot `RELAYER_KEY`; compromise permits policy-approved actions within the on-chain limits. | Residual operational risk. Key separation, least privilege, monitoring, rotation and revocation are documented below. Live secret rotation is not verified by this repository. |
+| M-01 | Medium | A compromised Worker can request transactions from the relayer signer and execute actions allowed by the on-chain policy. | Worker-side local private-key custody/signing has been removed in source and replaced with an authenticated external-signer protocol. This reduces direct key-extraction risk but does not eliminate the relayer's authority. The external service and its independent transaction restrictions are not implemented or deployed here, so M-01 remains open pending deployment and operational verification. |
 
 ## Recently resolved
 
@@ -31,24 +31,28 @@ addressed in this change: the endpoint now enforces a 5,000-block inclusive maxi
 is ignored and its tracked cache is removed, and the documentation identifies network IDs and
 historical findings explicitly.
 
-## Keeper key management
+## External signer boundary
 
-Treat `RELAYER_KEY` as a hot key. Keep it separate from owner keys, fund it only with gas, restrict
-access to Worker secrets, and monitor container activity. For planned rotation:
+The Worker now requires `SIGNER_URL` (HTTPS), `SIGNER_TOKEN`, and `RELAYER_ADDRESS`; it sends the
+unsigned transaction to the signer, verifies the returned relayer address and raw-transaction
+encoding, then broadcasts it through `RPC_URL`. The Worker's local private-key derivation and
+transaction-signing implementation have been removed. The signing service must independently
+enforce chain-ID, destination-container, zero outer value, calldata, gas/fee, authentication, and
+audit restrictions. A generic signing endpoint would leave the key remotely usable for arbitrary
+transactions and is not an acceptable deployment.
 
-1. Generate a replacement key in a secure environment; never put its private key in source control,
-   an ordinary `.env` file, logs, or this document.
-2. Authorize the replacement address through the owner-controlled
-   `AgentContainer.setRelayer(newAddress, true)`.
-3. Update the Cloudflare Worker `RELAYER_KEY` secret using Cloudflare's secret-management interface.
-4. Verify the Worker is using the replacement and can submit a harmless policy-approved action.
-5. Revoke the old address with `AgentContainer.setRelayer(oldAddress, false)` and verify its on-chain
-   `relayers(oldAddress)` value is false.
+This boundary reduces exposure of the private key to Worker runtime compromise, but the Worker can
+still invoke the signer and the relayer retains its on-chain policy-approved execution authority.
+M-01 is therefore not closed by this source change alone. The external signer implementation,
+independent restrictions, key rotation, relayer revocation, and live Cloudflare configuration must be
+deployed and verified before claiming operational remediation.
 
-For suspected compromise, pause the agent and revoke the old relayer immediately; rotate the Worker
-secret, authorize and verify the replacement, and only then unpause. A Foundry regression test verifies
-that a revoked relayer cannot execute. This documents and tests on-chain revocation behavior, but does
-not claim a live Cloudflare secret rotation or deployment has been performed.
+For planned rotation, create a replacement key inside the signing system, authorize its address
+through `AgentContainer.setRelayer(newAddress, true)`, update `RELAYER_ADDRESS` and the signer's
+identity, verify `/api/health` and `/api/status`, then revoke the old relayer and confirm its on-chain
+authorization is false. For suspected compromise, pause the agent and revoke the old relayer
+immediately. A Foundry regression test verifies on-chain revocation behavior; it does not verify a
+live signer or Cloudflare deployment.
 
 ## Previously reported issues
 

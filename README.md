@@ -1,5 +1,72 @@
 # TapeGuardian — autonomous agentic wallet on X Layer
 
+## 🔴 Live demo
+
+**Dashboard → https://tapeguard.tapeguard.workers.dev**
+
+| | |
+|---|---|
+| **Network** | X Layer testnet (chain ID 1952) |
+| **AgentContainer** | [`0x6d2A851f62F1C82DA7f60E679de1927dB8Eb93dB`](https://www.okx.com/web3/explorer/xlayer-test/address/0x6d2A851f62F1C82DA7f60E679de1927dB8Eb93dB) |
+| **Evidence endpoint** | [`GET /api/evidence`](https://tapeguard.tapeguard.workers.dev/api/evidence) — full JSON bundle |
+| **Status endpoint** | [`GET /api/status`](https://tapeguard.tapeguard.workers.dev/api/status) — live daemon state |
+
+---
+
+## 🎯 The problem it solves
+
+Automated crypto trading requires a bot that can act without you watching. The only way to give a bot that power today is to hand it your **private key** — which is unlimited, permanent access to everything in your wallet. One server compromise, one leaked environment variable, one rogue dependency, and the entire treasury is gone. There is also no on-chain record of what the bot was *authorised* to do versus what it *chose* to do, so you cannot prove — after the fact — that it was behaving correctly.
+
+TapeGuardian solves both problems:
+
+1. **The bot never holds a key.** The assets sit in a keyless smart-contract account (`AgentContainer`). The only way money leaves is through a transaction the on-chain rule engine (`PolicyCircuit`) approves inside the same atomic call.
+2. **The rules are on-chain and verifiable.** Every trade limit, every allowed exchange address, every daily cap is recorded on X Layer. Anyone — judges, auditors, users — can query the circuit and see exactly what the agent is and is not permitted to do.
+
+---
+
+## 👤 Who the users are
+
+| User | Pain point | What TapeGuardian gives them |
+|---|---|---|
+| **DeFi-active retail traders** | Want to rebalance a portfolio automatically but won't hand over a full private key | A trading agent that physically cannot exceed the limits they set |
+| **Small funds / DAOs** | Need an autonomous keeper but require on-chain proof of authorisation for accounting and governance | Immutable on-chain policy + an audit log every trade is written to |
+| **Developers building on X Layer** | Want a reference implementation of a keyless agentic account with composable policy enforcement | Fully open-source contracts, a live Cloudflare Worker daemon, and 16 Foundry regression tests |
+
+The entry-level user persona is someone who already holds OKB and USDT on X Layer and wants to keep a target weight (e.g., 60 % OKB / 40 % USDT) without watching the chart.
+
+---
+
+## ⚙️ How it uses the PolicyCircuit + AgentContainer on X Layer
+
+TapeGuardian deploys two contracts on X Layer and wires them together so that **no trade can happen unless both contracts agree, in the same transaction**:
+
+```
+PolicyCircuit  ←  AgentContainer.execute()  →  DEX router
+     ↑                     ↑
+  check()             called by keeper
+  (view, free)        (relayer key, low-value)
+```
+
+**PolicyCircuit** is the rule engine. The owner configures it once:
+- `setLimits(maxPerAction, dailyCapWei)` — hard ceilings on every trade and on 24-hour volume
+- `setTarget(router, true, false)` — whitelist the exact DEX router address
+- `setFunction(router, selector, true)` — whitelist only the swap selectors, not arbitrary calls
+- `setPaused(true)` — circuit-breaker: stops all trading on-chain even if the server is fully compromised
+
+Its `check()` function is a **pure view call** (zero gas, callable by anyone), so the daemon and the dashboard can dry-run any proposed trade before spending gas.
+
+**AgentContainer** is the keyless account that holds the funds. It calls `PolicyCircuit.check()` **inside** `execute()` before making any external call, so the rule check and the trade succeed or fail together — they cannot be separated. ERC-20 outflows (`approve`, `transfer`, `transferFrom`) are also checked against per-token limits, closing the vector where a `value = 0` swap calldata could move tokens without touching the native budget.
+
+The daemon (Cloudflare Worker, cron-driven) is the keeper:
+1. Reads balances and prices every minute
+2. Calls `AgentContainer.simulate()` (which runs the same checks as `execute()`) as a free dry-run
+3. If approved, asks the external signer service to sign the transaction — the private key never enters the Worker
+4. Broadcasts the signed transaction; the on-chain contracts enforce the limits at settlement
+
+The result is a trading agent where **the limits are not configuration — they are code on X Layer that cannot be bypassed by the server**.
+
+---
+
 ## Canonical contract evidence
 
 The Foundry deployment workspace is vendored at [`foundry/`](foundry/). It contains the exact

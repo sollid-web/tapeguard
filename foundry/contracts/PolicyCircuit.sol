@@ -407,6 +407,15 @@ contract PolicyCircuit {
         return block.timestamp / 1 days;
     }
 
+    // The strict equality (==) here is intentional. `_day()` returns
+    // block.timestamp / 1 days — a discrete integer that increments once per UTC
+    // day. Comparing the stored day bucket against the current bucket is the
+    // correct lazy-reset pattern: if the stored value is any value other than
+    // today's bucket (including an older day or the zero default), the accumulator
+    // is treated as zero and will be overwritten on the next recordExecution call.
+    // A miner can only skew block.timestamp by ~15 seconds, which cannot cross a
+    // day boundary (86 400 seconds), so the boundary cannot be manipulated to
+    // reset the daily limit prematurely or to prevent it from resetting.
     function _spentToday(address agent) private view returns (uint256) {
         return spendDay[agent] == _day() ? spentToday[agent] : 0;
     }

@@ -172,17 +172,29 @@ contract AgentContainer {
             if (!tokenOk) revert PolicyRejected(tokenReason);
         }
 
+        // Zero-address check: a call to address(0) would silently succeed on most
+        // EVM implementations but serve no legitimate purpose for a trading agent.
+        if (target == address(0)) revert ZeroAddress();
+
         (bool approved, string memory reason) = IPolicyCircuit(policyContract).check(address(this), target, value, data);
         if (!approved) revert PolicyRejected(reason);
 
+        // Checks-Effects-Interactions: update all state before any external call so
+        // that cross-function reentrancy (via info() or the public nonce getter)
+        // always observes the post-execution state. The nonReentrant guard already
+        // blocks re-entry into execute() itself; these writes close the gap for
+        // view functions that could otherwise observe a stale nonce mid-call.
         uint256 execNonce = nonce + 1;
-        IPolicyCircuit(policyContract).recordExecution(execNonce, value, token, tokenAmount);
-
         nonce = execNonce;
         executions += 1;
         lastExecutionAt = block.timestamp;
 
         emit PolicyChecked(target, value, _selector(data), reason);
+
+        // recordExecution enforces the per-action and daily limits on the circuit
+        // side. It is called after our state writes so the circuit's nonce check
+        // (agentNonce == lastNonce + 1) still matches the value we just committed.
+        IPolicyCircuit(policyContract).recordExecution(execNonce, value, token, tokenAmount);
 
         (bool ok, bytes memory returndata) = target.call{value: value}(data);
         if (!ok) revert ExecutionFailed(returndata);
@@ -283,17 +295,21 @@ contract AgentContainer {
     function withdrawFees(address to, uint256 amount) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
         if (amount > accruedFees) revert InsufficientFees();
+        // CEI: deduct before the external send so the event reflects settled state
+        // and a reentering caller (via the owner contract's receive hook) cannot
+        // withdraw the same fees twice.
         accruedFees -= amount;
-        _send(to, amount);
         emit FeesWithdrawn(to, amount);
+        _send(to, amount);
     }
 
     /// @notice Withdraws the agent's own funds (revenue the strategies generated).
     function withdraw(address to, uint256 amount) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
         if (amount > _available()) revert InsufficientBalance();
-        _send(to, amount);
+        // CEI: emit before the external send for the same reentrancy reason above.
         emit Withdrawn(to, amount);
+        _send(to, amount);
     }
 
     // ------------------------------------------------------------------ views

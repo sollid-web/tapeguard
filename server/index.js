@@ -366,7 +366,9 @@ async function handle(request, env, ctx) {
       if (body.maxFeedDeviationBps !== undefined) patch.maxFeedDeviationBps = String(clampInt(body.maxFeedDeviationBps, 0, 5000, 500));
       if (body.minLiquidityUsd !== undefined) patch.minLiquidityUsd = String(Math.max(10000, Number(body.minLiquidityUsd) || 10000));
       if (body.maxPriceImpactBps !== undefined) patch.maxPriceImpactBps = String(clampInt(body.maxPriceImpactBps, 1, 150, 150));
-      if (body.requireQuote !== undefined) patch.requireQuote = body.requireQuote ? '1' : '0';
+      if (body.requireQuote !== undefined && body.requireQuote !== true && body.requireQuote !== 1 && body.requireQuote !== '1') {
+        return bad('requireQuote must remain enabled for automated trading');
+      }
       if (body.minTradeWei !== undefined) {
         try { patch.minTradeWei = BigInt(String(body.minTradeWei)).toString(); } catch { return bad('minTradeWei must be an integer string in wei'); }
       }

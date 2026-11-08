@@ -162,8 +162,11 @@ avoid understating impact near the configured threshold. This is computed in the
 so token decimals cancel; the reserve is selected according to trade direction. Pool/router fees are
 intentionally excluded from this metric. Separately, `amountOutMin` is based on the lower of the
 router quote and feed-derived output, then reduced by `slippageBps`; the feed/pool deviation guard
-also applies. This is a reserve snapshot estimate for the supported two-token constant-product pool,
-not a guarantee of realized execution price or a TWAP. The guard threshold is 1–150 bps.
+also applies. Automated trading always requires a successful router quote: `requireQuote` cannot be
+disabled, and a missing/zero quote rejects the trade. The impact guard runs before quote handling, so
+no quote configuration or failure path skips it. This is a reserve snapshot estimate for the
+supported two-token constant-product pool, not a guarantee of realized execution price or a TWAP.
+The guard threshold is 1–150 bps.
 
 ## Rule kinds
 

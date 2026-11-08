@@ -20,8 +20,10 @@ it does not verify production infrastructure, Cloudflare secrets, D1 migrations,
   before comparison with `maxPriceImpactBps` (1–150 bps). This measures trade-size impact from the
   current reserve snapshot; it does not include pool/router fees and is not a quote, TWAP, or
   guarantee of realized price. Independently, the daemon checks router output against the feed and
-  uses the lower output, reduced by `slippageBps`, as `amountOutMin`. Tests cover trade direction,
-  decimal scales, trade sizes, and threshold boundaries.
+  uses the lower output, reduced by `slippageBps`, as `amountOutMin`. Automated trading requires the
+  router quote; the `requireQuote` configuration cannot disable that requirement, and the impact
+  check runs before quote resolution. Tests cover no-quote behavior, trade direction, decimal scales,
+  trade sizes, and threshold boundaries.
 
 The repo also previously had an off-by-one `eth_getLogs` limit, a tracked Wrangler account cache,
 and stale network/security documentation. Those source-hygiene and documentation issues are

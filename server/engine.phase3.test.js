@@ -4,8 +4,10 @@ import {
   acquireTickLock,
   constantProductCurveImpact,
   inputReserveForPath,
+  minOutFromPool,
   releaseTickLock,
   renewTickLock,
+  typed,
 } from './engine.js';
 
 function lockDb({ changes = 1 } = {}) {
@@ -71,4 +73,51 @@ test('fee-excluded curve impact scales with trade size and enforces the threshol
   assert.equal(atLimit.exceedsLimit, false);
   assert.equal(overLimit.impactBps, 102);
   assert.equal(overLimit.exceedsLimit, true);
+});
+
+test('price-impact guard runs before quote failure can stop a trade', async () => {
+  const pool = {
+    token0: '0x0000000000000000000000000000000000000001',
+    reserve0: 100n,
+    reserve1: 100n,
+  };
+  let quoteCalled = false;
+  const result = await minOutFromPool(
+    {},
+    { requireQuote: false, maxPriceImpactBps: 150, slippageBps: 100 },
+    2n,
+    [pool.token0, '0x0000000000000000000000000000000000000002'],
+    50n,
+    0,
+    pool,
+    async () => {
+      quoteCalled = true;
+      return null;
+    },
+  );
+  assert.match(result.error, /fee-excluded curve price impact/);
+  assert.equal(quoteCalled, false);
+});
+
+test('automated config cannot disable mandatory router quotes', () => {
+  assert.equal(typed({ requireQuote: '0' }).requireQuote, true);
+});
+
+test('missing router quote rejects a low-impact trade instead of falling back to feed output', async () => {
+  const pool = {
+    token0: '0x0000000000000000000000000000000000000001',
+    reserve0: 100_000n,
+    reserve1: 100_000n,
+  };
+  const result = await minOutFromPool(
+    {},
+    { requireQuote: false, maxPriceImpactBps: 150, slippageBps: 100 },
+    1n,
+    [pool.token0, '0x0000000000000000000000000000000000000002'],
+    50n,
+    0,
+    pool,
+    async () => null,
+  );
+  assert.match(result.error, /router returned no quote/);
 });

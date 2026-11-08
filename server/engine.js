@@ -130,7 +130,7 @@ export function typed(raw) {
     slippageBps: Math.min(2000, Math.max(0, num(raw.slippageBps, 150))),
     swapDeadlineS: Math.max(60, num(raw.swapDeadlineS, 900)),
     maxQueueAgeS: Math.max(60, num(raw.maxQueueAgeS, 900)),
-    requireQuote: String(raw.requireQuote) !== '0',
+    requireQuote: true,
     maxFeedDeviationBps: Math.min(5000, Math.max(0, num(raw.maxFeedDeviationBps, 500))),
     minLiquidityUsd: Math.max(10000, num(raw.minLiquidityUsd, 10000)),
     maxPriceImpactBps: Math.min(150, Math.max(1, num(raw.maxPriceImpactBps, 150))),
@@ -456,32 +456,32 @@ async function liquidityGuard(env, cfg, path, prices) {
   return { pool, depthUsd };
 }
 
-async function minOutFromPool(env, cfg, amountIn, path, feedOut, outDecimals, pool) {
+export async function minOutFromPool(env, cfg, amountIn, path, feedOut, outDecimals, pool, quoteOut = chain.quoteOut) {
+  if (!pool || path.length !== 2) {
+    return { error: 'pool reserves are required for price-impact validation' };
+  }
+  const reserveIn = inputReserveForPath(path, pool);
+  if (reserveIn <= 0n) return { error: 'zero-liquidity pool - refusing trade' };
+  const impact = constantProductCurveImpact(amountIn, reserveIn, cfg.maxPriceImpactBps);
+  const impactBps = impact.impactBps;
+  if (impact.exceedsLimit) {
+    return { error: `estimated fee-excluded curve price impact ${impactBps} bps exceeds max ${cfg.maxPriceImpactBps} bps` };
+  }
+
   let onchain = null;
   try {
-    onchain = await chain.quoteOut(env, cfg.router, amountIn, path);
+    onchain = await quoteOut(env, cfg.router, amountIn, path);
   } catch (error) {
-    if (cfg.requireQuote) return { error: 'no on-chain quote: ' + (error?.message || String(error)) };
+    return { error: 'no on-chain quote: ' + (error?.message || String(error)) };
   }
   if (!onchain || onchain <= 0n) {
-    if (cfg.requireQuote) return { error: 'router returned no quote - refusing to size the trade from the feed alone' };
-    return { minOut: bps(feedOut, cfg.slippageBps), note: 'feed only' };
+    return { error: 'router returned no quote - refusing to size the trade from the feed alone' };
   }
   const diff = feedOut > onchain ? feedOut - onchain : onchain - feedOut;
   const deviationBps = Number((diff * 10000n) / onchain);
   if (onchain <= 0n) return { error: 'zero-liquidity pool quote - refusing trade' };
   if (deviationBps > cfg.maxFeedDeviationBps) {
     return { error: `feed deviates from the pool by ${deviationBps} bps (max ${cfg.maxFeedDeviationBps}) - refusing to trade` };
-  }
-  let impactBps = 0;
-  if (pool && path.length === 2) {
-    const reserveIn = inputReserveForPath(path, pool);
-    if (reserveIn <= 0n) return { error: 'zero-liquidity pool - refusing trade' };
-    const impact = constantProductCurveImpact(amountIn, reserveIn, cfg.maxPriceImpactBps);
-    impactBps = impact.impactBps;
-    if (impact.exceedsLimit) {
-      return { error: `estimated fee-excluded curve price impact ${impactBps} bps exceeds max ${cfg.maxPriceImpactBps} bps` };
-    }
   }
   const base = feedOut < onchain ? feedOut : onchain;
   return {

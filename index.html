@@ -174,6 +174,134 @@ details.gloss p{margin:8px 0 0;font-size:12.8px;line-height:1.6;color:var(--dim)
 .qline b{color:var(--txt)}
 .hintline{font-size:12px;color:var(--dim2);margin-top:8px}
 @media(max-width:520px){ .hero{padding:18px 15px} .hero h1{font-size:22.5px} .hero .lead{font-size:14px} }
+
+/* ---------- visual refinement: preserve TapeGuardian's established palette ---------- */
+:root{
+  color-scheme:dark;
+  --surface-shadow:0 12px 30px rgba(0,0,0,.2);
+}
+html{scroll-behavior:smooth;scroll-padding-top:110px}
+body{
+  background:
+    radial-gradient(900px 500px at 15% -10%, rgba(37,224,139,.08), transparent 60%),
+    radial-gradient(800px 460px at 95% 0%, rgba(87,200,255,.07), transparent 55%),
+    linear-gradient(rgba(29,44,59,.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(29,44,59,.12) 1px, transparent 1px),
+    var(--bg);
+  background-size:auto,auto,48px 48px,48px 48px,auto;
+}
+.wrap{width:min(100%,1210px);padding-inline:20px}
+header.top{background:rgba(6,10,15,.9);border-color:rgba(29,44,59,.9);box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.top-in{padding:12px 20px}
+.logo{box-shadow:0 0 0 1px rgba(37,224,139,.18),0 5px 16px rgba(37,224,139,.16)}
+nav.tabs{gap:5px;padding:4px 20px 11px}
+.tab{border-radius:8px;transition:background .18s ease,color .18s ease,border-color .18s ease}
+.tab:hover{background:rgba(19,32,48,.75)}
+.tab.active{box-shadow:0 4px 14px rgba(37,224,139,.12)}
+main{padding-top:22px}
+.grid{gap:14px;margin-bottom:14px}
+.card,.stat,.tl .box,.steps .st,.demo-scenario,.strip .it,details.gloss{
+  border-color:rgba(29,44,59,.92);
+  box-shadow:var(--surface-shadow);
+}
+.card{
+  min-width:0;
+  padding:18px;
+  border-radius:15px;
+  background:linear-gradient(155deg,rgba(19,32,48,.96),rgba(10,17,25,.98) 72%);
+  transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease;
+}
+.card:hover{border-color:rgba(87,200,255,.2);box-shadow:0 16px 34px rgba(0,0,0,.25)}
+.card-h{margin-bottom:14px}
+.card h3{font-size:12px;letter-spacing:.75px;color:var(--dim)}
+.stat{padding:16px;border-radius:13px;background:linear-gradient(155deg,rgba(19,32,48,.96),rgba(10,17,25,.98))}
+.stat .k{color:var(--dim);letter-spacing:.7px}
+.stat .v{font-size:clamp(20px,2.1vw,25px);letter-spacing:-.4px}
+.stat .s{color:var(--dim)}
+.hero{
+  padding:clamp(22px,4vw,36px);
+  border-color:rgba(87,200,255,.2);
+  box-shadow:var(--surface-shadow);
+  background:
+    radial-gradient(700px 300px at 12% -20%, rgba(37,224,139,.12), transparent 62%),
+    radial-gradient(600px 300px at 100% 0%, rgba(87,200,255,.1), transparent 60%),
+    linear-gradient(155deg,rgba(19,32,48,.98),rgba(10,17,25,.98) 76%);
+}
+.hero h1{font-size:clamp(26px,3vw,34px);line-height:1.16;letter-spacing:-.65px}
+.hero .kicker{letter-spacing:1.2px}
+.hero .lead{color:var(--txt);opacity:.88}
+.tl .box,.steps .st{padding:17px;border-radius:13px;background:linear-gradient(155deg,rgba(19,32,48,.94),rgba(10,17,25,.98))}
+.tl .box .ico{margin-bottom:10px}
+.steps .st{position:relative;overflow:hidden}
+.steps .st:before{content:"";position:absolute;inset:0 auto 0 0;width:2px;background:linear-gradient(180deg,var(--acc),var(--acc2));opacity:.58}
+.steps .st .n{box-shadow:0 4px 12px rgba(37,224,139,.12)}
+.strip .it{border-radius:11px;background:rgba(12,21,32,.88)}
+.chip,.pill{letter-spacing:.1px}
+.btn{
+  min-height:38px;
+  border-radius:9px;
+  transition:background .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease,filter .16s ease;
+}
+.btn:hover{border-color:rgba(87,200,255,.4);background:#16232f}
+.btn:active{transform:translateY(1px)}
+.btn.primary{box-shadow:0 5px 15px rgba(37,224,139,.13)}
+.btn.primary:hover{box-shadow:0 7px 20px rgba(37,224,139,.2);filter:brightness(1.04)}
+.btn.danger:hover{background:rgba(255,107,107,.1);border-color:rgba(255,107,107,.55)}
+.btn:disabled{filter:saturate(.6);box-shadow:none}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{
+  outline:2px solid var(--acc2);
+  outline-offset:2px;
+}
+input,select,textarea{
+  min-height:38px;
+  border-radius:8px;
+  background:rgba(10,19,28,.88);
+  transition:border-color .16s ease,box-shadow .16s ease,background .16s ease;
+}
+input:hover,select:hover,textarea:hover{border-color:#2c4459}
+input:focus,select:focus,textarea:focus{border-color:var(--acc2);box-shadow:0 0 0 3px rgba(87,200,255,.1)}
+input[type=checkbox]{min-height:0;accent-color:var(--acc)}
+a{transition:color .16s ease}
+a:hover{color:var(--acc)}
+.kv{border-color:rgba(29,44,59,.65)}
+th,td{padding:9px 10px;border-color:rgba(29,44,59,.72)}
+th{color:var(--dim);letter-spacing:.6px}
+tbody tr:hover{background:rgba(19,32,48,.32)}
+.ev{background:rgba(11,20,29,.9);padding:10px 12px}
+.feed{scrollbar-color:var(--line) transparent;scrollbar-width:thin}
+.notice{box-shadow:0 6px 18px rgba(0,0,0,.12)}
+.sheet{box-shadow:0 18px 50px rgba(0,0,0,.38)}
+.wcard{transition:background .16s ease,border-color .16s ease,transform .16s ease}
+.wcard:hover{border-color:rgba(87,200,255,.35);transform:translateY(-1px)}
+footer{border-color:rgba(29,44,59,.8)}
+@media(max-width:700px){
+  .wrap{padding-inline:14px}
+  .top-in{padding-inline:14px}
+  nav.tabs{padding-inline:14px}
+  main{padding-top:16px}
+  .grid{gap:10px;margin-bottom:10px}
+  .card{padding:15px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr))}
+  .g4{grid-template-columns:repeat(auto-fit,minmax(min(100%,165px),1fr))}
+}
+@media(max-width:520px){
+  .wrap{padding-inline:12px}
+  .top-in{align-items:flex-start;gap:8px;padding:10px 12px}
+  .top-right{justify-content:flex-end}
+  nav.tabs{gap:3px;padding:2px 12px 9px}
+  .tab{padding:7px 10px;font-size:12px}
+  .card{padding:14px;border-radius:13px}
+  .stat{padding:13px}
+  .stat .v{font-size:21px}
+  .hero{padding:19px 16px}
+  .hero h1{font-size:23px}
+  table{min-width:520px}
+  .card:has(table){overflow-x:auto}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
 </style>
 <!-- tapecode:contracts -->
 <script>

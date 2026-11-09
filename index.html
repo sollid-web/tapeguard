@@ -474,6 +474,7 @@ h2.sec:after{content:"";height:1px;flex:1;background:linear-gradient(90deg,var(-
   h2.sec{font-size:15px;gap:9px}
 }
 </style>
+<link rel="stylesheet" href="./styles/tapeguard-product.css">
 <!-- tapecode:contracts -->
 <script>
 window.APP_CONFIG = {
@@ -2625,6 +2626,27 @@ window.APP_CONFIG = {
 
 <!-- ============ OVERVIEW ============ -->
 <section class="view" id="v-overview">
+  <section class="mission-intro" aria-labelledby="mission-title">
+    <div class="mission-copy">
+      <div class="mission-eyebrow"><span class="mission-pulse"></span> AUTONOMOUS SECURITY · X LAYER</div>
+      <h1 id="mission-title">Autonomy without unrestricted access.</h1>
+      <p> TapeGuardian monitors opportunities, evaluates every proposed action against your on-chain rules, and only then allows the container execution path.</p>
+    </div>
+    <div class="mission-proof">
+      <span class="proof-label">THE GUARDED EXECUTION PATH</span>
+      <div class="pipeline" aria-label="Market signal to agent decision to policy circuit to container execution">
+        <div class="pipeline-step"><span class="pipeline-index">01</span><b>Market signal</b><small>Observe</small></div>
+        <span class="pipeline-arrow" aria-hidden="true">→</span>
+        <div class="pipeline-step"><span class="pipeline-index">02</span><b>Agent decision</b><small>Propose</small></div>
+        <span class="pipeline-arrow" aria-hidden="true">→</span>
+        <div class="pipeline-step pipeline-gate"><span class="pipeline-index">03</span><b>Policy circuit</b><small>Authorize</small></div>
+        <span class="pipeline-arrow" aria-hidden="true">→</span>
+        <div class="pipeline-step"><span class="pipeline-index">04</span><b>Container</b><small>Execute</small></div>
+      </div>
+      <div class="proof-foot"><span>Every action is checked before execution.</span><span class="proof-lock">◈ OWNER-DEFINED RULES</span></div>
+    </div>
+  </section>
+  <div class="section-intro"><div><span class="section-kicker">SYSTEM OVERVIEW</span><h2>Mission control</h2></div><p>Live state, market signals and verifiable activity in one place.</p></div>
   <div class="grid g4" id="ov-stats"></div>
   <div class="grid g2">
     <div class="card">

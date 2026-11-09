@@ -929,6 +929,8 @@ function renderAlloc(){
   }
   var c = SERVER.ok ? (SERVER.status.config || {}) : {};
   function setIf(id, value){ var el = $(id); if(el && document.activeElement !== el) el.value = value; }
+  setIf('#au-container', c.container || '');
+  setIf('#au-policy', c.policy || '');
   setIf('#au-target', c.targetOkbBps !== undefined ? c.targetOkbBps : 6000);
   setIf('#au-drift', c.driftBps !== undefined ? c.driftBps : 500);
   setIf('#au-maxtrades', c.maxTradesPerDay !== undefined ? c.maxTradesPerDay : 6);
@@ -1052,6 +1054,8 @@ function initAutonomy(){
   $('#btn-au-save').onclick = function(){
     if(!SERVER_TOKEN){ toast('Unlock the control plane first (owner password)'); return; }
     var body = {
+      container: $('#au-container').value.trim(),
+      policy: $('#au-policy').value.trim(),
       targetOkbBps: Number($('#au-target').value || 0),
       driftBps: Number($('#au-drift').value || 0),
       maxTradesPerDay: Number($('#au-maxtrades').value || 1),

@@ -2526,6 +2526,10 @@ window.APP_CONFIG = {
     <div class="card">
       <div class="card-h"><h3>Rebalancing strategy</h3><span class="chip" id="au-drift-chip"></span></div>
       <div id="au-alloc"></div>
+      <div class="grid g2" style="margin:0 0 8px">
+        <div><label class="f">AgentContainer address</label><input id="au-container" placeholder="0x… (deployed container)"></div>
+        <div><label class="f">PolicyCircuit address</label><input id="au-policy" placeholder="0x… (deployed policy)"></div>
+      </div>
       <div class="grid g3" style="margin:0 0 8px">
         <div><label class="f">Target OKB weight (bps)</label><input id="au-target" value="6000"></div>
         <div><label class="f">Drift band (bps)</label><input id="au-drift" value="500"></div>

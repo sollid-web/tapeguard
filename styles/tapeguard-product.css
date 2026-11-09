@@ -240,11 +240,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .mission-copy h1 { font-size: clamp(32px,9vw,40px); }
   .mission-copy p { font-size: 15px; }
   .mission-proof { padding: 15px 12px; }
-  .pipeline { display: grid; grid-template-columns: minmax(0,1fr) 18px minmax(0,1fr); gap: 7px; }
+  .pipeline { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
   .pipeline-step { padding: 11px 9px; }
   .pipeline-step b { font-size: 12px; }
-  .pipeline-arrow { justify-self: center; }
-  .pipeline-arrow:nth-of-type(2) { display: none; }
+  .pipeline-arrow { display: none; }
   .proof-foot { align-items: flex-start; flex-direction: column; }
   .section-intro { display: block; margin: 22px 0 13px; }
   .section-intro h2 { font-size: 23px; }

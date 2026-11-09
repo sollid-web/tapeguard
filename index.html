@@ -88,6 +88,13 @@ td.mono{font-family:var(--mono);word-break:break-all}
 .ev .de{font-size:11.5px;color:var(--dim);margin-top:2px;word-break:break-word}
 .ev.TRIGGER{border-color:var(--acc2)} .ev.POLICY{border-color:var(--violet)}
 .ev.EXEC{border-color:var(--acc)} .ev.REJECT{border-color:var(--bad)}
+.demo-scenario{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg2)}
+.demo-scenario .scenario-header{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.demo-scenario .scenario-title{font-weight:600;font-size:13.5px}
+.demo-scenario .scenario-desc{margin:0 0 8px}
+.demo-scenario .scenario-out{margin-top:8px}
+.pill.EXEC{border-color:var(--acc);color:var(--acc)}
+.pill.REJECT{border-color:var(--bad);color:var(--bad)}
 .ev.FUND{border-color:var(--warn)} .ev.FEE{border-color:#f4d35e} .ev.CONFIG{border-color:var(--dim2)}
 .rule{display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed #17232f}
 .rule:last-child{border-bottom:none}
@@ -2386,6 +2393,40 @@ window.APP_CONFIG = {
       </div>
       <div class="row"><button class="btn primary sm" id="btn-evaluate">Evaluate against circuit</button><button class="btn sm" id="btn-preview-calldata">Build execution request</button></div>
       <div id="sim-out" class="mt"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Agent mission demo</h3><span class="chip ok">3 scenarios</span></div>
+      <p class="small" style="margin:0 0 10px">The agent received a rebalancing mission. It proposes three actions. The PolicyCircuit decides which ones it is allowed to execute — in real time, on X Layer.</p>
+      <div id="demo-scenarios">
+        <div class="demo-scenario" data-idx="0">
+          <div class="scenario-header">
+            <span class="pill EXEC">Scenario 1</span>
+            <span class="scenario-title">Small rebalance — within daily cap</span>
+          </div>
+          <div class="scenario-desc small dim">Agent proposes buying 0.5 OKB to restore the 60/40 target weight. Amount is within the 1 OKB per-trade and 5 OKB daily limit.</div>
+          <button class="btn primary sm scenario-run" data-value="0.5" data-memo="Rebalance: buy OKB to restore 60/40 target">▶ Run this scenario</button>
+          <div class="scenario-out"></div>
+        </div>
+        <div class="demo-scenario" data-idx="1" style="margin-top:10px">
+          <div class="scenario-header">
+            <span class="pill REJECT">Scenario 2</span>
+            <span class="scenario-title">Oversized trade — exceeds per-trade cap</span>
+          </div>
+          <div class="scenario-desc small dim">Agent proposes moving 10 OKB in a single trade. The PolicyCircuit rejects it — the per-trade limit is 1 OKB. The server is fully compromised in this scenario; it still cannot execute.</div>
+          <button class="btn danger sm scenario-run" data-value="10" data-memo="Oversized trade attempt: 10 OKB single swap">▶ Run this scenario</button>
+          <div class="scenario-out"></div>
+        </div>
+        <div class="demo-scenario" data-idx="2" style="margin-top:10px">
+          <div class="scenario-header">
+            <span class="pill REJECT">Scenario 3</span>
+            <span class="scenario-title">Rogue target — unlisted contract</span>
+          </div>
+          <div class="scenario-desc small dim">Agent proposes calling an arbitrary contract address not on the whitelist. Even a valid amount is rejected — the target is not authorised on the PolicyCircuit.</div>
+          <button class="btn danger sm scenario-run" data-value="0.3" data-target-override="0x000000000000000000000000000000000000dEaD" data-memo="Rogue action: call unlisted contract">▶ Run this scenario</button>
+          <div class="scenario-out"></div>
+        </div>
+      </div>
+      <div class="small dim mt" style="margin-top:14px">Each scenario loads the values into the simulator above and evaluates immediately. Results are real circuit checks — not mocked.</div>
     </div>
   </div>
 </section>

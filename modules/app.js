@@ -1689,6 +1689,40 @@ function boot(){
     log(res.ok?'POLICY':'REJECT', 'Simulated policy check · '+(res.ok?'approved':'rejected'),
         res.ok? (res.passed+'/'+res.total+' rules passed for '+short(action.target)) : (res.code+': '+res.reason));
   };
+  /* scenario demo buttons */
+  document.querySelectorAll('.scenario-run').forEach(function(btn){
+    btn.onclick = function(){
+      var value = btn.getAttribute('data-value') || '0.3';
+      var memo  = btn.getAttribute('data-memo')  || 'Demo scenario';
+      var targetOverride = btn.getAttribute('data-target-override') || '';
+      var valEl = $('#sim-value'), memoEl = $('#sim-memo');
+      if(valEl) valEl.value = value;
+      if(memoEl) memoEl.value = memo;
+      /* override target if the scenario needs a rogue address */
+      var selEl = $('#sim-target');
+      if(targetOverride && selEl){
+        /* add a temporary option for the rogue address */
+        var existing = Array.from(selEl.options).find(function(o){ return o.value === targetOverride; });
+        if(!existing){
+          var opt = document.createElement('option');
+          opt.value = targetOverride; opt.textContent = 'rogue contract (' + targetOverride.slice(0,10) + '…)';
+          opt.setAttribute('data-temp','1');
+          selEl.appendChild(opt);
+        }
+        selEl.value = targetOverride;
+      }
+      var action;
+      try{ action = currentSimAction(); }catch(err){ toast('Invalid amount'); return; }
+      var res = policy.evaluate(action);
+      var out = btn.closest('.demo-scenario').querySelector('.scenario-out');
+      out.textContent = '';
+      out.appendChild(policyResultNode(res, action));
+      /* also update main sim-out */
+      var mainOut = $('#sim-out'); if(mainOut){ mainOut.textContent=''; mainOut.appendChild(policyResultNode(res,action)); }
+      log(res.ok?'POLICY':'REJECT','Demo scenario · '+(res.ok?'✅ APPROVED':'🔴 REJECTED')+' · '+memo,
+          res.ok ? (res.passed+'/'+res.total+' rules passed') : (res.code+': '+res.reason));
+    };
+  });
   $('#btn-preview-calldata').onclick = function(){
     var action;
     try{ action = currentSimAction(); }catch(err){ toast('Invalid amount'); return; }

@@ -72,7 +72,17 @@ async function typeOverlay(text) {
 /* ── main ────────────────────────────────────────────────────────────── */
 (async () => {
   console.log('Launching browser…');
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    args: [
+      '--disable-gpu',
+      '--disable-gpu-sandbox',
+      '--disable-software-rasterizer',
+      '--disable-dev-shm-usage',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+    ]
+  });
   const context = await browser.newContext({ viewport: { width: W, height: H } });
   page = await context.newPage();
 

@@ -302,6 +302,177 @@ footer{border-color:rgba(29,44,59,.8)}
 @media(prefers-reduced-motion:reduce){
   *,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+/* ---------- dashboard hierarchy and on-brand policy-circuit visual ---------- */
+.hero{
+  display:grid;
+  grid-template-columns:minmax(0,1.08fr) minmax(300px,.92fr);
+  grid-template-areas:
+    "kicker visual"
+    "title visual"
+    "lead visual"
+    "cta visual"
+    "live visual"
+    "hint visual";
+  align-items:center;
+  column-gap:clamp(28px,5vw,64px);
+  row-gap:0;
+  padding:clamp(28px,4vw,48px);
+  min-height:440px;
+  overflow:hidden;
+  position:relative;
+}
+.hero:after{
+  content:"";
+  position:absolute;
+  width:390px;
+  height:390px;
+  right:20%;
+  top:-250px;
+  border:1px solid rgba(37,224,139,.08);
+  border-radius:50%;
+  pointer-events:none;
+}
+.hero>.kicker{grid-area:kicker;align-self:end;margin-bottom:13px}
+.hero>h1{grid-area:title;max-width:16ch;margin-bottom:14px;font-size:clamp(30px,3.8vw,46px);letter-spacing:-1.1px}
+.hero>.lead{grid-area:lead;max-width:58ch;line-height:1.75}
+.hero>.hero-visual{grid-area:visual}
+.hero>.cta{grid-area:cta;margin-top:24px}
+.hero>#st-live{grid-area:live}
+.hero>.hintline{grid-area:hint;max-width:56ch;margin-top:12px}
+.hero-visual{
+  min-width:0;
+  min-height:326px;
+  position:relative;
+  isolation:isolate;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:10px;
+  padding:26px;
+  overflow:hidden;
+  border:1px solid rgba(87,200,255,.2);
+  border-radius:18px;
+  background:
+    radial-gradient(300px 220px at 50% 45%,rgba(37,224,139,.09),transparent 75%),
+    linear-gradient(145deg,rgba(6,10,15,.78),rgba(10,17,25,.86));
+  box-shadow:inset 0 1px rgba(231,240,248,.035),0 24px 60px rgba(0,0,0,.24);
+}
+.hero-visual:before{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  inset:0;
+  opacity:.22;
+  background-image:linear-gradient(rgba(29,44,59,.55) 1px,transparent 1px),linear-gradient(90deg,rgba(29,44,59,.55) 1px,transparent 1px);
+  background-size:28px 28px;
+  mask-image:linear-gradient(135deg,#000,transparent 78%);
+}
+.visual-orbit{position:absolute;z-index:-1;border:1px solid rgba(87,200,255,.13);border-radius:50%;pointer-events:none}
+.orbit-one{width:260px;height:260px;right:-110px;top:-126px}
+.orbit-two{width:180px;height:180px;left:-112px;bottom:-90px;border-color:rgba(37,224,139,.13)}
+.visual-label,.visual-foot,.visual-lock,.visual-state,.visual-link span,.circuit-copy small{
+  font:10px/1.3 var(--mono);
+  letter-spacing:.8px;
+}
+.visual-label{display:flex;align-items:center;gap:8px;color:var(--dim);margin-bottom:6px}
+.visual-pulse{width:7px;height:7px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px rgba(37,224,139,.5)}
+.visual-node,.visual-circuit{display:flex;align-items:center;gap:12px;position:relative}
+.visual-node{
+  padding:13px 14px;
+  border:1px solid rgba(29,44,59,.95);
+  border-radius:12px;
+  background:linear-gradient(110deg,rgba(19,32,48,.94),rgba(10,17,25,.94));
+}
+.visual-node>span:nth-child(2){flex:1;min-width:0}
+.visual-node b,.circuit-copy b{display:block;color:var(--txt);font-size:13px;font-weight:600;letter-spacing:0}
+.visual-node small{display:block;margin-top:3px;color:var(--dim);font-size:11px}
+.visual-icon,.circuit-mark{
+  width:34px;
+  height:34px;
+  flex:0 0 34px;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(87,200,255,.17);
+  border-radius:10px;
+  background:rgba(87,200,255,.07);
+  color:var(--acc2);
+  font-size:17px;
+}
+.container-node .visual-icon{color:var(--acc);border-color:rgba(37,224,139,.2);background:rgba(37,224,139,.07)}
+.visual-lock{color:var(--dim2);font-size:9px;white-space:nowrap}
+.visual-link{height:25px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:9px;padding:0 16px}
+.visual-link i{height:1px;background:linear-gradient(90deg,rgba(37,224,139,.08),rgba(37,224,139,.42))}
+.visual-link i:last-child{background:linear-gradient(90deg,rgba(87,200,255,.42),rgba(87,200,255,.08))}
+.visual-link span{color:var(--dim2);font-size:8px;text-align:center;white-space:nowrap}
+.visual-circuit{
+  min-height:72px;
+  padding:13px 14px;
+  border:1px solid rgba(37,224,139,.34);
+  border-radius:12px;
+  background:linear-gradient(100deg,rgba(37,224,139,.1),rgba(19,32,48,.96) 52%,rgba(87,200,255,.07));
+  box-shadow:0 0 26px rgba(37,224,139,.055);
+}
+.circuit-mark{color:#04140c;border:0;background:linear-gradient(135deg,var(--acc),var(--acc2));font-size:18px}
+.circuit-copy{flex:1;min-width:0}
+.circuit-copy small{display:block;margin-top:3px;color:var(--dim);font-size:8px}
+.visual-state{color:var(--acc);font-size:8px;white-space:nowrap}
+.visual-foot{display:flex;justify-content:space-between;gap:8px;margin-top:7px;color:var(--dim2);font-size:8px}
+.hero .cta .btn{min-height:42px}
+.hero .cta .btn:not(.primary){background:rgba(10,17,25,.76)}
+h2.sec{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin:30px 0 16px;
+  font-size:17px;
+  letter-spacing:-.15px;
+}
+h2.sec:before{
+  content:"";
+  width:3px;
+  height:21px;
+  flex:0 0 3px;
+  border-radius:3px;
+  background:linear-gradient(180deg,var(--acc),var(--acc2));
+}
+h2.sec:after{content:"";height:1px;flex:1;background:linear-gradient(90deg,var(--line),transparent)}
+.view:not(#v-start)>h2.sec{margin-top:5px}
+.view:not(#v-start)>.notice:first-of-type{box-shadow:inset 3px 0 rgba(37,224,139,.5)}
+#v-overview>#ov-stats .stat{position:relative;overflow:hidden}
+#v-overview>#ov-stats .stat:after{
+  content:"";
+  position:absolute;
+  width:74px;
+  height:74px;
+  right:-27px;
+  top:-34px;
+  border:1px solid rgba(87,200,255,.13);
+  border-radius:50%;
+}
+.card h3{line-height:1.4}
+.card-h .chip{flex:0 0 auto}
+.g2,.g3,.g4{align-items:stretch}
+.g2>.card,.g3>.card,.g4>.card{height:100%}
+@media(max-width:850px){
+  .hero{
+    grid-template-columns:minmax(0,1fr);
+    grid-template-areas:"kicker" "title" "lead" "visual" "cta" "live" "hint";
+    min-height:0;
+    row-gap:0;
+    padding:clamp(22px,5vw,34px);
+  }
+  .hero-visual{width:min(100%,560px);min-height:300px;margin:26px auto 4px}
+}
+@media(max-width:520px){
+  .hero{padding:21px 16px}
+  .hero>h1{font-size:clamp(27px,8vw,34px);letter-spacing:-.8px}
+  .hero>.cta{gap:8px;margin-top:18px}
+  .hero>.cta .btn{flex:1 1 100%;justify-content:center}
+  .hero-visual{min-height:270px;padding:18px 14px;margin-top:22px}
+  .visual-foot{font-size:7px}
+  h2.sec{font-size:15px;gap:9px}
+}
 </style>
 <!-- tapecode:contracts -->
 <script>
@@ -2353,6 +2524,29 @@ window.APP_CONFIG = {
       Then it runs <b>non-stop, on its own</b> — and it physically <b>cannot</b> go past your rules,
       even if someone steals the key it runs with.
     </p>
+    <div class="hero-visual" aria-hidden="true">
+      <div class="visual-orbit orbit-one"></div>
+      <div class="visual-orbit orbit-two"></div>
+      <div class="visual-label"><span class="visual-pulse"></span> PROTECTED EXECUTION</div>
+      <div class="visual-node owner-node">
+        <span class="visual-icon">⌘</span>
+        <span><b>Owner rules</b><small>Limits · targets · pause</small></span>
+        <span class="visual-lock">OWNER</span>
+      </div>
+      <div class="visual-link"><i></i><span>POLICY CHECK</span><i></i></div>
+      <div class="visual-circuit">
+        <span class="circuit-mark">◈</span>
+        <span class="circuit-copy"><b>PolicyCircuit</b><small>ON-CHAIN RULE ENGINE</small></span>
+        <span class="visual-state">ENFORCED</span>
+      </div>
+      <div class="visual-link"><i></i><span>APPROVED ONLY</span><i></i></div>
+      <div class="visual-node container-node">
+        <span class="visual-icon">◇</span>
+        <span><b>Keyless container</b><small>Funds stay owner-controlled</small></span>
+        <span class="visual-lock">NO KEY</span>
+      </div>
+      <div class="visual-foot"><span>RULES FIRST</span><span>EVERY ACTION CHECKED</span></div>
+    </div>
     <div class="cta">
       <button class="btn primary" data-goto="overview">See it work in 60 seconds</button>
       <button class="btn" data-goto="policy">Set my rules</button>

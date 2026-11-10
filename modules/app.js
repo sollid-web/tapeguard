@@ -175,12 +175,19 @@ function renderFeed(){
 /* =========================================================================
    7. Overview rendering
    ========================================================================= */
-function statCard(k, v, s, cls){
+function statCard(k, v, s, cls, gaugePct){
   var d = mk('div','stat');
   d.appendChild(mk('div','k',k));
   var vv = mk('div','v',v); if(cls) vv.className='v '+cls;
   d.appendChild(vv);
   if(s) d.appendChild(mk('div','s',s));
+  if(gaugePct !== undefined){
+    var bar = mk('div','gauge');
+    var fill = mk('i'); fill.style.width = Math.min(100, Math.max(0, gaugePct)) + '%';
+    var col = gaugePct > 80 ? 'var(--bad)' : gaugePct > 55 ? 'var(--warn)' : 'var(--acc)';
+    fill.style.background = col;
+    bar.appendChild(fill); d.appendChild(bar);
+  }
   return d;
 }
 function renderOverview(){
@@ -192,7 +199,8 @@ function renderOverview(){
   var ok = S.daemon.running;
   var rv = feeTotal(S.fees.ledger, S.fees.activation, S.fees.paid);
   h.appendChild(statCard('Container balance', fmtUnits(bal,4)+' '+CHAIN.sym, 'USDT '+fmtUnits(S.balance.USDT,2)+' · '+short(containerAddr()||'not bound')));
-  h.appendChild(statCard('Daily volume used', fmtUnits(spent,4)+' / '+fmtUnits(cap,4), 'rolling 24h window · cap '+fmtUnits(p.maxPerTx,3)+' '+CHAIN.sym+' per tx'));
+  var spentPct = cap > 0n ? Number(spent * 100n / cap) : 0;
+  h.appendChild(statCard('Daily volume used', fmtUnits(spent,4)+' / '+fmtUnits(cap,4), 'rolling 24h window · cap '+fmtUnits(p.maxPerTx,3)+' '+CHAIN.sym+' per tx', null, spentPct));
   h.appendChild(statCard('Daemon', ok ? 'RUNNING' : 'STOPPED', (S.daemon.ticks||0)+' ticks · '+S.triggers.length+' triggers', ok?null:null));
   h.appendChild(statCard('Fees credited', fmtUnits(rv,4)+' USDT', 'activation + '+(S.fees.bps/100).toFixed(2)+'% of executed volume'));
 
@@ -821,8 +829,10 @@ function renderAutonomy(){
     last ? ('last ' + ago(last.ts) + ' · ' + ((last && last.source) || 'cron')) : 'no cycle yet', d.online ? null : null));
   stats.appendChild(statCard('Agent value', h && h.totalUsd !== undefined ? '$' + Number(h.totalUsd).toFixed(2) : '—',
     h ? ('OKB ' + Number(h.okbNative || 0).toFixed(4) + ' + USDT ' + Number(h.usdtUnits || 0).toFixed(2)) : 'needs RPC_URL + container'));
+  var okbPct = h && h.currentOkbBps !== undefined ? Number(h.currentOkbBps) / 100 : undefined;
   stats.appendChild(statCard('OKB weight', h && h.currentOkbBps !== undefined ? fmtBps(h.currentOkbBps) : '—',
-    'target ' + fmtBps(cfg.targetOkbBps) + ' ± ' + fmtBps(cfg.driftBps) + ' · ' + (s.prices ? 'OKB $' + Number(s.prices.okb).toFixed(2) : 'no price')));
+    'target ' + fmtBps(cfg.targetOkbBps) + ' ± ' + fmtBps(cfg.driftBps) + ' · ' + (s.prices ? 'OKB $' + Number(s.prices.okb).toFixed(2) : 'no price'),
+    null, okbPct));
   stats.appendChild(statCard('Queue', String(d.pending || 0) + ' pending',
     'sent ' + ((d.counts && d.counts.sent) || 0) + ' · failed ' + ((d.counts && d.counts.failed) || 0) + ' · skipped ' + ((d.counts && d.counts.skipped) || 0)));
 

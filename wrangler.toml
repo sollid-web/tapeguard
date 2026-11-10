@@ -7,8 +7,11 @@ binding = "DB"
 database_name = "tapeguardian"
 database_id = "4ecc67a2-c0d4-4a2d-8896-94840b6b9e20"
 
+[build]
+command = "npm run build"
+
 [assets]
-directory = "."
+directory = "dist"
 binding = "ASSETS"
 
 [vars]

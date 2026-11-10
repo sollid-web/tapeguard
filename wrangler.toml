@@ -8,7 +8,7 @@ database_name = "tapeguardian"
 database_id = "4ecc67a2-c0d4-4a2d-8896-94840b6b9e20"
 
 [assets]
-directory = "dist"
+directory = "."
 binding = "ASSETS"
 
 [vars]

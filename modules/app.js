@@ -1349,10 +1349,22 @@ function isMobileUA(){
   if(/android|iphone|ipad|ipod|mobile|opera mini|iemobile|silk/i.test(ua)) return true;
   return (navigator.maxTouchPoints > 1) && /macintosh|mac os x/i.test(ua); /* iPad claiming to be a Mac */
 }
-function providerName(p){
+function providerName(p, announcedName){
+  /* EIP-6963 names are more reliable than injected flags: some wallets expose
+     compatibility flags used by other extensions. Prefer an explicit wallet
+     announcement, then fall back to provider-specific flags. */
   try{
+    var announced = String(announcedName || '').trim();
+    if(/okx|okex/i.test(announced)) return 'OKX Wallet';
+    if(/metamask/i.test(announced)) return 'MetaMask';
+    if(/trust wallet/i.test(announced)) return 'Trust Wallet';
+    if(/coinbase/i.test(announced)) return 'Coinbase Wallet';
+    if(/rabby/i.test(announced)) return 'Rabby';
+    if(/bitget|bitkeep/i.test(announced)) return 'Bitget Wallet';
+    if(/tokenpocket/i.test(announced)) return 'TokenPocket';
+    if(/phantom/i.test(announced)) return 'Phantom';
+    if(p.isOkxWallet || p.isOKXWallet || p.isOKExWallet || p.isOKEx) return 'OKX Wallet';
     if(p.isMetaMask && !p.isBraveWallet) return 'MetaMask';
-    if(p.isOkxWallet || p.isOKExWallet) return 'OKX Wallet';
     if(p.isCoinbaseWallet) return 'Coinbase Wallet';
     if(p.isTrust || p.isTrustWallet) return 'Trust Wallet';
     if(p.isRabby) return 'Rabby';
@@ -1389,7 +1401,7 @@ function injectedWallets(){
   for(i=0;i<EIP6963.announced.length;i++){
     var a = EIP6963.announced[i];
     if(a && a.provider && a.provider.request && !found.some(function(f){ return f.provider === a.provider; })){
-      found.push({ provider:a.provider, name:(a.info && a.info.name) || providerName(a.provider) });
+      found.push({ provider:a.provider, name:providerName(a.provider, a.info && a.info.name) });
     }
   }
   return found;
@@ -1403,7 +1415,7 @@ function walletApps(){
   var bare = href.replace(/^https?:\/\//i,'');
   return [
     { name:'MetaMask', icon:'🦊', note:'Opens MetaMask and loads this page inside it', href:'https://metamask.app.link/dapp/' + bare },
-    { name:'OKX Wallet', icon:'◉', note:'Opens OKX and loads this page inside it', href:'https://www.okx.com/download?deeplink=' + encodeURIComponent('okx://wallet/dapp/url?dappUrl=' + encodeURIComponent(href)) },
+    { name:'OKX Wallet', icon:'OKX', note:'Open TapeGuardian in the OKX Wallet app browser', href:'https://www.okx.com/download?deeplink=' + encodeURIComponent('okx://wallet/dapp/url?dappUrl=' + encodeURIComponent(href)) },
     { name:'Trust Wallet', icon:'🛡', note:'Opens Trust Wallet and loads this page inside it', href:'https://link.trustwallet.com/open_url?coin_id=60&url=' + encodeURIComponent(href) },
     { name:'Coinbase Wallet', icon:'🔵', note:'Opens Coinbase Wallet and loads this page inside it', href:'https://go.cb-w.com/dapp?cb_url=' + encodeURIComponent(href) }
   ];

@@ -292,24 +292,25 @@ footer{border-color:rgba(29,44,59,.8)}
 }
 @media(max-width:520px){
   .wrap{padding-inline:12px}
-  /* header: grid with brand+buttons on row1, chips spanning row2 */
+  /* row 1: chips full width */
+  /* row 2: brand left, buttons right */
   .top-in{
-    display:grid;
-    grid-template-columns:1fr auto;
-    grid-template-rows:auto auto;
-    padding:10px 12px 6px;
-    gap:6px 8px;
-    align-items:center;
+    display:flex;flex-direction:column;gap:0;
+    padding:8px 12px 6px;
   }
-  .brand{grid-column:1;grid-row:1}
-  .top-right{grid-column:2;grid-row:1;flex-direction:row;align-items:center;gap:6px}
-  .top-right-chips{grid-column:1/-1;grid-row:2;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+  .top-right{
+    order:-1;width:100%;
+    display:flex;align-items:center;gap:6px;
+    margin-bottom:6px;
+  }
+  .top-right-chips{display:flex;gap:6px;flex:1;overflow-x:auto;scrollbar-width:none}
   .top-right-chips::-webkit-scrollbar{display:none}
-  .top-right-btns{display:flex;gap:6px}
+  .top-right-chips .chip{font-size:11px;padding:4px 8px;white-space:nowrap}
+  .top-right-btns{display:flex;gap:5px;flex-shrink:0}
+  .top-right-btns .btn{padding:5px 9px;font-size:11.5px;white-space:nowrap}
+  .brand{width:100%;display:flex;align-items:center;gap:8px}
   .brand .sub{display:none}
   .brand strong{font-size:14px}
-  .top-right .chip{font-size:11px;padding:4px 8px;white-space:nowrap}
-  .top-right-btns .btn{padding:6px 10px;font-size:12px;white-space:nowrap}
   nav.tabs{gap:3px;padding:2px 12px 9px}
   .tab{padding:7px 10px;font-size:12px}
   .card{padding:14px;border-radius:13px}

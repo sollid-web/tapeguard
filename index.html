@@ -3,32 +3,3068 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TapeGuard · PolicyCircuit control plane</title>
+<title>TapeGuardian · an always-on crypto agent that can only do what you allow</title>
+<meta name="description" content="TapeGuardian is an automated trading agent for your crypto. You set the rules once — spend cap per trade, per day, which exchange, how much drift — and the rules are enforced on-chain. It runs 24/7, and you can stop it any time.">
+<meta name="theme-color" content="#060a0f">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
-:root{color-scheme:dark;--bg:#09090b;--panel:#111113;--panel2:#18181b;--line:#27272a;--muted:#71717a;--text:#f4f4f5;--green:#22c55e;--red:#ef4444;--purple:#a78bfa;--yellow:#eab308}*{box-sizing:border-box}body{margin:0;background:radial-gradient(900px 500px at 5% -10%,rgba(34,197,94,.07),transparent 60%),radial-gradient(800px 400px at 100% 0,rgba(124,58,237,.08),transparent 58%),var(--bg);color:var(--text);font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.topbar{height:70px;border-bottom:1px solid var(--line);background:rgba(9,9,11,.9);backdrop-filter:blur(16px);display:flex;align-items:center;justify-content:space-between;padding:0 clamp(18px,4vw,56px);position:sticky;top:0;z-index:3}.brand{display:flex;align-items:center;gap:10px}.mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:#04140a;background:linear-gradient(135deg,#4ade80,#22c55e);font-weight:900;box-shadow:0 0 28px rgba(34,197,94,.2)}.brand b{display:block;letter-spacing:-.02em}.brand small{display:block;color:var(--muted);font-size:11px}.top-right{display:flex;align-items:center;gap:14px;color:#a1a1aa;font-size:12px}.pulse,.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(34,197,94,.12)}button{font:inherit;cursor:pointer}.wallet,.outline{border:1px solid rgba(34,197,94,.35);border-radius:8px;padding:8px 11px;color:#bbf7d0;background:rgba(34,197,94,.1)}.outline{border-color:#3f3f46;color:#d4d4d8;background:var(--panel2)}.content{width:min(100%,1440px);margin:auto;padding:34px clamp(18px,4vw,56px) 40px}.heading{display:flex;justify-content:space-between;align-items:end;gap:18px;margin-bottom:27px}.eyebrow{color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase}.heading h1{margin:8px 0 5px;font-size:clamp(27px,3vw,35px);line-height:1;letter-spacing:-.05em}.heading p{margin:0;color:var(--muted)}.heading-actions{display:flex;align-items:center;gap:10px}.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid;border-radius:999px;padding:5px 8px;font-size:10px;font-weight:800;letter-spacing:.08em}.allow{color:#86efac;background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3)}.reject{color:#fca5a5;background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.3)}.neutral{color:#a1a1aa;background:var(--panel2);border-color:#3f3f46}.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}.card{background:linear-gradient(145deg,rgba(24,24,27,.97),rgba(15,15,17,.97));border:1px solid var(--line);border-radius:13px;box-shadow:0 18px 45px rgba(0,0,0,.18)}.kpi{padding:17px;min-height:135px;position:relative}.kpi.green-glow{border-color:rgba(34,197,94,.28);box-shadow:0 0 40px rgba(34,197,94,.05)}.label{color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}.value{font-size:27px;font-weight:750;letter-spacing:-.05em;margin-top:15px}.meta{color:var(--muted);font-size:11px;margin-top:5px}.positive{color:#4ade80}.negative{color:#f87171}.gauge{height:3px;background:#27272a;border-radius:99px;overflow:hidden;position:absolute;left:17px;right:17px;bottom:17px}.gauge span{display:block;height:100%;background:var(--green);border-radius:99px}.gauge.yellow span{background:var(--yellow)}.status{display:flex;align-items:center;gap:10px;margin-top:18px}.shield{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:rgba(34,197,94,.1);color:#4ade80;font-size:18px}.active{color:#4ade80;font-weight:800;letter-spacing:.05em}.sub{color:var(--muted);font-size:11px}.grid{display:grid;grid-template-columns:1.65fr .9fr;gap:16px}.card-pad{padding:21px}.title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.title-row h2{font-size:16px;margin:6px 0 0;letter-spacing:-.02em}.chart-stat{display:flex;align-items:baseline;gap:10px;margin-top:18px}.chart-stat strong{font-size:24px;letter-spacing:-.04em}.small{font-size:12px}.chart{height:260px;margin-top:10px}.chart-foot{display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding-top:10px;color:var(--muted);font-size:10px}.guardrails{margin-top:18px}.guard{display:grid;grid-template-columns:27px 1fr auto;align-items:center;gap:10px;padding:13px 0;border-bottom:1px solid var(--line)}.guard:last-child{border-bottom:0}.guard-icon{height:25px;width:25px;border-radius:7px;display:grid;place-items:center;color:#4ade80;background:rgba(34,197,94,.1)}.guard strong{font-size:12px}.guard span{display:block;color:var(--muted);font-size:10px;margin-top:2px}.guard>b{font-size:11px}.note{display:flex;gap:8px;padding:11px;border-radius:9px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);font-size:10px;margin-top:12px}.section{margin:33px 0 15px;display:flex;justify-content:space-between;align-items:end}.section h2{margin:6px 0 0;font-size:20px;letter-spacing:-.04em}.legend{color:var(--muted);font-size:10px}.legend span{margin-left:12px}.legend i{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:4px}.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}.mini{padding:21px}.mini h3{margin:0;font-size:13px}.mini p{color:var(--muted);font-size:10px;margin:4px 0 0}.mini-chart{height:175px;margin-top:16px}.bottom{display:grid;grid-template-columns:1.35fr .8fr;gap:16px;margin-top:16px}.feed{padding:21px}.log{margin-top:14px}.row{display:grid;grid-template-columns:27px 1.2fr .8fr auto;gap:11px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}.row:last-child{border-bottom:0}.decision-icon{width:25px;height:25px;border-radius:50%;display:grid;place-items:center;font-weight:800}.decision-icon.allow{background:rgba(34,197,94,.1)}.decision-icon.reject{background:rgba(239,68,68,.1)}.row strong{font-size:11px}.row small{display:block;color:var(--muted);font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.amount{text-align:right}.time{display:flex;flex-direction:column;align-items:flex-end;gap:7px;color:var(--muted);font-size:10px;white-space:nowrap}.sim{padding:21px}.sim p{color:var(--muted);font-size:11px}.fields{display:grid;grid-template-columns:1fr 1.2fr;gap:9px}.fields label{color:#a1a1aa;font-size:10px;font-weight:600}.fields input{width:100%;height:38px;background:var(--bg);color:var(--text);border:1px solid #3f3f46;border-radius:8px;padding:0 10px;margin-top:6px;outline:0}.fields input:focus{border-color:var(--green)}.verdict{padding:13px;border:1px solid;border-radius:10px;margin-top:15px}.verdict.ok{background:rgba(34,197,94,.07);border-color:rgba(34,197,94,.28)}.verdict.no{background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.28)}.verdict-top{display:flex;justify-content:space-between}.verdict h3{margin:4px 0 0;font-size:24px;letter-spacing:.04em}.verdict.ok h3{color:#4ade80}.verdict.no h3{color:#f87171}.verdict p{margin:8px 0 14px}.limit{display:flex;justify-content:space-between;color:var(--muted);font-size:9px}.simulate{width:100%;margin-top:13px;padding:10px;border:1px solid rgba(34,197,94,.35);border-radius:8px;background:#14532d;color:#dcfce7;font-weight:600}.simulator-progress{height:4px;background:#27272a;border-radius:99px;overflow:hidden;margin-top:6px}.simulator-progress span{display:block;height:100%;background:var(--green)}.no .simulator-progress span{background:var(--red)}footer{display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:34px;padding-top:18px;color:#52525b;font-size:10px}@media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}.grid,.bottom{grid-template-columns:1fr}}@media(max-width:720px){.top-right .network{display:none}.heading{align-items:flex-start;flex-direction:column}.heading-actions{width:100%;justify-content:space-between}.kpis{grid-template-columns:1fr 1fr}.charts{grid-template-columns:1fr}.card-pad,.mini,.feed,.sim{padding:16px}.chart{height:220px}.row{grid-template-columns:27px 1fr auto}.amount{display:none}footer{display:block}.fields{grid-template-columns:1fr}}@media(max-width:420px){.kpis{grid-template-columns:1fr}.wallet{padding:7px 8px;font-size:11px}}
+:root{
+  --bg:#060a0f; --bg2:#0a1119; --card:#0f1922; --card2:#132030; --line:#1d2c3b;
+  --txt:#e7f0f8; --dim:#8aa2b6; --dim2:#5f768a;
+  --acc:#25e08b; --acc2:#57c8ff; --warn:#ffb84d; --bad:#ff6b6b; --violet:#9d7bff;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:
+  radial-gradient(900px 500px at 15% -10%, rgba(37,224,139,.10), transparent 60%),
+  radial-gradient(800px 460px at 95% 0%, rgba(87,200,255,.09), transparent 55%),
+  var(--bg);
+  color:var(--txt);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;min-height:100vh}
+a{color:var(--acc2);text-decoration:none}
+.wrap{max-width:1180px;margin:0 auto;padding:0 14px}
+header.top{position:sticky;top:0;z-index:40;backdrop-filter:blur(12px);background:rgba(6,10,15,.82);border-bottom:1px solid var(--line)}
+.top-in{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:10px 14px 8px;max-width:1180px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto}
+.logo{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-size:17px;color:#04140c;
+  background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 0 22px rgba(37,224,139,.35)}
+.brand strong{display:block;font-size:15px;letter-spacing:.2px}
+.brand .sub{font-size:11px;color:var(--dim)}
+.top-chips{display:flex;gap:8px;padding:0 14px 8px;max-width:1180px;margin:0 auto;overflow-x:auto;scrollbar-width:none}
+.top-chips::-webkit-scrollbar{display:none}
+nav.tabs{display:flex;gap:4px;overflow-x:auto;padding:0 8px 8px;max-width:1180px;margin:0 auto;scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+.tab{white-space:nowrap;border:1px solid transparent;background:transparent;color:var(--dim);padding:8px 13px;border-radius:9px;font-size:14px;cursor:pointer;outline:none;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+.tab:hover{color:var(--txt);background:#0e1721}
+.tab:active{background:transparent}
+.tab:focus-visible{outline:2px solid var(--acc2);outline-offset:2px}
+.tab.active{color:#04140c;background:linear-gradient(135deg,var(--acc),var(--acc2));font-weight:600;outline:none}
+.tab.active:active{background:linear-gradient(135deg,var(--acc),var(--acc2))}
+main{padding:16px 0 60px}
+.view{display:none}
+.view.active{display:block;animation:fade .18s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.grid{display:grid;gap:12px;margin-bottom:12px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.card{background:linear-gradient(180deg,var(--card),var(--bg2));border:1px solid var(--line);border-radius:14px;padding:14px}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.card h3{margin:0;font-size:13.5px;letter-spacing:.3px;text-transform:uppercase;color:var(--dim)}
+.stat{background:linear-gradient(180deg,var(--card2),var(--bg2));border:1px solid var(--line);border-radius:14px;padding:13px}
+.stat .k{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim2)}
+.stat .v{font-size:26px;font-weight:700;margin-top:6px;font-variant-numeric:tabular-nums;word-break:break-all;line-height:1.1}
+.stat .s{font-size:13px;color:var(--dim);margin-top:4px}
+.stat .gauge{height:5px;background:var(--line);border-radius:99px;margin-top:8px;overflow:hidden}
+.stat .gauge i{display:block;height:100%;border-radius:99px;background:var(--acc);transition:width .4s}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:#0c1520;color:var(--dim);font-family:var(--mono)}
+.chip.ok{color:var(--acc);border-color:rgba(37,224,139,.35);background:rgba(37,224,139,.08)}
+.chip.bad{color:var(--bad);border-color:rgba(255,107,107,.35);background:rgba(255,107,107,.08)}
+.chip.warn{color:var(--warn);border-color:rgba(255,184,77,.35);background:rgba(255,184,77,.08)}
+.chip.live{color:var(--acc2);border-color:rgba(87,200,255,.35);background:rgba(87,200,255,.08)}
+.btn{border:1px solid var(--line);background:#101b26;color:var(--txt);padding:8px 13px;border-radius:10px;font-size:13px;cursor:pointer;font-family:inherit}
+.btn:hover{border-color:#2c4459;background:#16232f}
+.btn.primary{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#04140c;border-color:transparent;font-weight:650}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--bad);border-color:rgba(255,107,107,.35)}
+.btn.sm{padding:5px 9px;font-size:12px;border-radius:8px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row.between{justify-content:space-between}
+.small{font-size:13.5px}
+.dim{color:var(--dim)}
+.mono{font-family:var(--mono)}
+.mt{margin-top:10px}
+label.f{display:block;font-size:13px;color:var(--dim);margin:0 0 5px}
+input,select,textarea{width:100%;background:#0a131c;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:8px 10px;font-family:inherit;font-size:13px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc2)}
+input[type=checkbox]{width:auto}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px dashed #17232f;font-size:14px}
+.kv:last-child{border-bottom:none}
+.kv span:first-child{color:var(--dim)}
+.kv span:last-child{text-align:right;font-family:var(--mono);word-break:break-all}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid #16222e;vertical-align:top}
+th{color:var(--dim2);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+td.mono{font-family:var(--mono);word-break:break-all}
+.feed{max-height:420px;overflow:auto;display:flex;flex-direction:column;gap:7px;padding-right:4px}
+.ev{border-left:3px solid var(--line);background:#0b141d;border-radius:0 10px 10px 0;padding:8px 10px}
+.ev .t{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--dim2);font-family:var(--mono)}
+.ev .ti{font-size:14px;margin-top:4px}
+.ev .de{font-size:13px;color:var(--dim);margin-top:3px;word-break:break-word}
+.ev.TRIGGER{border-color:var(--acc2)} .ev.POLICY{border-color:var(--violet)}
+.ev.EXEC{border-color:var(--acc)} .ev.REJECT{border-color:var(--bad)}
+.demo-scenario{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg2)}
+.demo-scenario .scenario-header{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.demo-scenario .scenario-title{font-weight:600;font-size:13.5px}
+.demo-scenario .scenario-desc{margin:0 0 8px}
+.demo-scenario .scenario-out{margin-top:8px}
+.pill.EXEC{border-color:var(--acc);color:var(--acc)}
+.pill.REJECT{border-color:var(--bad);color:var(--bad)}
+.ev.FUND{border-color:var(--warn)} .ev.FEE{border-color:#f4d35e} .ev.CONFIG{border-color:var(--dim2)}
+.rule{display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed #17232f}
+.rule:last-child{border-bottom:none}
+.dot{width:16px;height:16px;border-radius:50%;flex:0 0 16px;margin-top:1px;display:grid;place-items:center;font-size:10px;font-weight:700}
+.dot.p{background:rgba(37,224,139,.15);color:var(--acc);border:1px solid rgba(37,224,139,.45)}
+.dot.f{background:rgba(255,107,107,.15);color:var(--bad);border:1px solid rgba(255,107,107,.45)}
+.bar{height:7px;background:#101c26;border-radius:99px;overflow:hidden;margin-top:6px}
+.bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2))}
+.notice{border:1px solid rgba(255,184,77,.35);background:rgba(255,184,77,.08);color:#ffd9a0;border-radius:12px;padding:10px 13px;font-size:12.5px;margin:14px 0 0}
+.notice.err{border-color:rgba(255,107,107,.4);background:rgba(255,107,107,.08);color:#ffc4c4}
+.notice.ok{border-color:rgba(37,224,139,.35);background:rgba(37,224,139,.07);color:#b6f4d6}
+canvas{width:100%;display:block}
+pre{background:#08101a;border:1px solid var(--line);border-radius:10px;padding:10px;overflow:auto;font-size:11.5px;font-family:var(--mono);color:#bcd}
+.pill{font-size:10.5px;padding:2px 7px;border-radius:99px;border:1px solid var(--line);color:var(--dim);font-family:var(--mono)}
+.code{font-family:var(--mono);font-size:11.5px;background:#0a131c;border:1px solid var(--line);border-radius:8px;padding:6px 8px;word-break:break-all}
+footer{border-top:1px solid var(--line);color:var(--dim2);font-size:12px;padding:18px 0 40px;text-align:center}
+body.public .needs-wallet,body.public #btn-start-daemon,body.public #btn-stop-daemon{display:none!important}
+body.public .dangerous{opacity:.5;pointer-events:none}
+h2.sec{font-size:19px;margin:4px 0 14px;font-weight:700}
+h4{margin:16px 0 7px;font-size:15px;color:var(--txt);font-weight:600}
+ul.docs{margin:6px 0 6px 18px;padding:0;color:var(--dim);font-size:12.5px}
+ul.docs li{margin:3px 0}
+ul.docs b{color:var(--txt)}
+
+/* ---------- start here / explainer (written for people who are not devs) ---------- */
+.hero{border:1px solid var(--line);border-radius:18px;padding:22px 20px;
+  background:radial-gradient(700px 300px at 12% -20%, rgba(37,224,139,.16), transparent 62%),
+             radial-gradient(600px 300px at 100% 0%, rgba(87,200,255,.13), transparent 60%),
+             linear-gradient(180deg,var(--card),var(--bg2));
+  margin-bottom:14px}
+.hero h1{margin:0 0 8px;font-size:27px;line-height:1.2;letter-spacing:-.3px;max-width:20ch}
+.hero .lead{margin:0;font-size:15px;line-height:1.62;color:#cfe0ee;max-width:62ch}
+.hero .lead b{color:var(--txt)}
+.hero .kicker{font-size:11.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--acc);margin-bottom:10px}
+.hero .cta{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
+.hero .cta .btn{padding:11px 16px;font-size:13.5px;border-radius:11px}
+/* ---------- wallet chooser (works on phones, not just desktop extensions) ---------- */
+.sheet-bd.hidden{display:none}
+.sheet-bd{position:fixed;inset:0;z-index:80;background:rgba(3,6,10,.72);backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;padding:0}
+.sheet{width:100%;max-width:460px;background:linear-gradient(180deg,var(--card),var(--bg2));border:1px solid var(--line);border-radius:18px 18px 0 0;padding:16px 16px 22px;max-height:86vh;overflow:auto}
+@media(min-width:560px){ .sheet-bd{align-items:center;padding:20px} .sheet{border-radius:18px} }
+.sheet h3{margin:0 0 4px;font-size:15px}
+.sheet .sub{font-size:12.5px;color:var(--dim);margin-bottom:12px;line-height:1.5}
+.wcard{display:flex;align-items:center;gap:11px;width:100%;text-align:left;border:1px solid var(--line);background:#0d1721;color:var(--txt);border-radius:12px;padding:11px 12px;margin-bottom:8px;cursor:pointer;font-family:inherit;font-size:13.5px}
+.wcard:hover{border-color:#2c4459;background:#122031}
+.wcard .wi{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:16px;background:#0a131c;border:1px solid var(--line);flex:0 0 30px}
+.wcard .wt{flex:1;min-width:0}
+.wcard .wt b{display:block;font-size:13.5px;font-weight:600}
+.wcard .wt span{display:block;font-size:11.5px;color:var(--dim);margin-top:2px}
+.wcard .wf{font-size:11px;color:var(--dim2);font-family:var(--mono)}
+.sheet .divider{display:flex;align-items:center;gap:8px;color:var(--dim2);font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin:14px 0 10px}
+.sheet .divider:before,.sheet .divider:after{content:"";height:1px;background:var(--line);flex:1}
+.sheet .close{width:100%;margin-top:6px}
+.sheet button,.sheet .wcard{min-height:48px}
+.sheet .wcard{min-height:54px}
+body.no-scroll{overflow:hidden}
+.wlink{font-size:12px;color:var(--dim);line-height:1.55;margin:0 0 10px}
+.tl{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));margin-bottom:14px}
+.tl .box{border:1px solid var(--line);border-radius:14px;padding:14px;background:linear-gradient(180deg,var(--card),var(--bg2))}
+.tl .box .ico{font-size:19px;margin-bottom:8px}
+.tl .box h3{margin:0 0 6px;font-size:14.5px;text-transform:none;letter-spacing:0;color:var(--txt)}
+.tl .box p{margin:0;font-size:13px;line-height:1.6;color:var(--dim)}
+.steps{counter-reset:s;display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.steps .st{border:1px solid var(--line);border-radius:14px;padding:14px;background:#0d1721;position:relative}
+.steps .st .n{width:26px;height:26px;border-radius:9px;display:grid;place-items:center;font-weight:700;font-size:12.5px;
+  color:#04140c;background:linear-gradient(135deg,var(--acc),var(--acc2));margin-bottom:9px}
+.steps .st h4{margin:0 0 5px;font-size:14px}
+.steps .st p{margin:0;font-size:12.8px;line-height:1.6;color:var(--dim)}
+.strip{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.strip .it{display:flex;gap:9px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:#0c1520}
+.strip .it .m{font-size:13px}
+.strip .it .x{font-size:12.6px;line-height:1.55;color:var(--dim)}
+details.gloss{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#0c1520;margin-bottom:8px}
+details.gloss summary{cursor:pointer;font-size:13.2px;font-weight:600;color:var(--txt)}
+details.gloss p{margin:8px 0 0;font-size:12.8px;line-height:1.6;color:var(--dim)}
+.qline{font-size:12.6px;line-height:1.6;color:var(--dim);margin:6px 0}
+.qline b{color:var(--txt)}
+.hintline{font-size:12px;color:var(--dim2);margin-top:8px}
+@media(max-width:520px){ .hero{padding:18px 15px} .hero h1{font-size:22.5px} .hero .lead{font-size:14px} }
+
+/* ---------- visual refinement: preserve TapeGuardian's established palette ---------- */
+:root{
+  color-scheme:dark;
+  --surface-shadow:0 12px 30px rgba(0,0,0,.2);
+}
+html{scroll-behavior:smooth;scroll-padding-top:110px}
+body{
+  background:
+    radial-gradient(900px 500px at 15% -10%, rgba(37,224,139,.08), transparent 60%),
+    radial-gradient(800px 460px at 95% 0%, rgba(87,200,255,.07), transparent 55%),
+    linear-gradient(rgba(29,44,59,.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(29,44,59,.12) 1px, transparent 1px),
+    var(--bg);
+  background-size:auto,auto,48px 48px,48px 48px,auto;
+}
+.wrap{width:min(100%,1210px);padding-inline:20px}
+header.top{background:rgba(6,10,15,.9);border-color:rgba(29,44,59,.9);box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.top-in{padding:12px 20px}
+.logo{box-shadow:0 0 0 1px rgba(37,224,139,.18),0 5px 16px rgba(37,224,139,.16)}
+nav.tabs{gap:5px;padding:4px 20px 11px}
+.tab{border-radius:8px;transition:background .18s ease,color .18s ease,border-color .18s ease}
+.tab:hover{background:rgba(19,32,48,.75)}
+.tab.active{box-shadow:0 4px 14px rgba(37,224,139,.12)}
+main{padding-top:22px}
+.grid{gap:14px;margin-bottom:14px}
+.card,.stat,.tl .box,.steps .st,.demo-scenario,.strip .it,details.gloss{
+  border-color:rgba(29,44,59,.92);
+  box-shadow:var(--surface-shadow);
+}
+.card{
+  min-width:0;
+  padding:18px;
+  border-radius:15px;
+  background:linear-gradient(155deg,rgba(19,32,48,.96),rgba(10,17,25,.98) 72%);
+  transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease;
+}
+.card:hover{border-color:rgba(87,200,255,.2);box-shadow:0 16px 34px rgba(0,0,0,.25)}
+.card-h{margin-bottom:14px}
+.card h3{font-size:12px;letter-spacing:.75px;color:var(--dim)}
+.stat{padding:16px;border-radius:13px;background:linear-gradient(155deg,rgba(19,32,48,.96),rgba(10,17,25,.98))}
+.stat .k{color:var(--dim);letter-spacing:.7px}
+.stat .v{font-size:clamp(20px,2.1vw,25px);letter-spacing:-.4px}
+.stat .s{color:var(--dim)}
+.hero{
+  padding:clamp(22px,4vw,36px);
+  border-color:rgba(87,200,255,.2);
+  box-shadow:var(--surface-shadow);
+  background:
+    radial-gradient(700px 300px at 12% -20%, rgba(37,224,139,.12), transparent 62%),
+    radial-gradient(600px 300px at 100% 0%, rgba(87,200,255,.1), transparent 60%),
+    linear-gradient(155deg,rgba(19,32,48,.98),rgba(10,17,25,.98) 76%);
+}
+.hero h1{font-size:clamp(26px,3vw,34px);line-height:1.16;letter-spacing:-.65px}
+.hero .kicker{letter-spacing:1.2px}
+.hero .lead{color:var(--txt);opacity:.88}
+.tl .box,.steps .st{padding:17px;border-radius:13px;background:linear-gradient(155deg,rgba(19,32,48,.94),rgba(10,17,25,.98))}
+.tl .box .ico{margin-bottom:10px}
+.steps .st{position:relative;overflow:hidden}
+.steps .st:before{content:"";position:absolute;inset:0 auto 0 0;width:2px;background:linear-gradient(180deg,var(--acc),var(--acc2));opacity:.58}
+.steps .st .n{box-shadow:0 4px 12px rgba(37,224,139,.12)}
+.strip .it{border-radius:11px;background:rgba(12,21,32,.88)}
+.chip,.pill{letter-spacing:.1px}
+.btn{
+  min-height:38px;
+  border-radius:9px;
+  transition:background .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease,filter .16s ease;
+}
+.btn:hover{border-color:rgba(87,200,255,.4);background:#16232f}
+.btn:active{transform:translateY(1px)}
+.btn.primary{box-shadow:0 5px 15px rgba(37,224,139,.13)}
+.btn.primary:hover{box-shadow:0 7px 20px rgba(37,224,139,.2);filter:brightness(1.04)}
+.btn.danger:hover{background:rgba(255,107,107,.1);border-color:rgba(255,107,107,.55)}
+.btn:disabled{filter:saturate(.6);box-shadow:none}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{
+  outline:2px solid var(--acc2);
+  outline-offset:2px;
+}
+input,select,textarea{
+  min-height:38px;
+  border-radius:8px;
+  background:rgba(10,19,28,.88);
+  transition:border-color .16s ease,box-shadow .16s ease,background .16s ease;
+}
+input:hover,select:hover,textarea:hover{border-color:#2c4459}
+input:focus,select:focus,textarea:focus{border-color:var(--acc2);box-shadow:0 0 0 3px rgba(87,200,255,.1)}
+input[type=checkbox]{min-height:0;accent-color:var(--acc)}
+a{transition:color .16s ease}
+a:hover{color:var(--acc)}
+.kv{border-color:rgba(29,44,59,.65)}
+th,td{padding:9px 10px;border-color:rgba(29,44,59,.72)}
+th{color:var(--dim);letter-spacing:.6px}
+tbody tr:hover{background:rgba(19,32,48,.32)}
+.ev{background:rgba(11,20,29,.9);padding:10px 12px}
+.feed{scrollbar-color:var(--line) transparent;scrollbar-width:thin}
+.notice{box-shadow:0 6px 18px rgba(0,0,0,.12)}
+.sheet{box-shadow:0 18px 50px rgba(0,0,0,.38)}
+.wcard{transition:background .16s ease,border-color .16s ease,transform .16s ease}
+.wcard:hover{border-color:rgba(87,200,255,.35);transform:translateY(-1px)}
+footer{border-color:rgba(29,44,59,.8)}
+@media(max-width:700px){
+  .wrap{padding-inline:14px}
+  .top-in{padding-inline:14px}
+  nav.tabs{padding-inline:14px}
+  main{padding-top:16px}
+  .grid{gap:10px;margin-bottom:10px}
+  .card{padding:15px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr))}
+  .g4{grid-template-columns:repeat(auto-fit,minmax(min(100%,165px),1fr))}
+}
+@media(max-width:520px){
+  .wrap{padding-inline:12px}
+  .top-in{padding:10px 12px 8px}
+  .brand .sub{display:none}
+  .brand strong{font-size:14px}
+  .top-chips{padding:0 12px 8px;gap:6px}
+  .top-chips .chip{font-size:11px;padding:4px 8px;white-space:nowrap}
+  #btn-wallet{padding:6px 10px;font-size:12px;white-space:nowrap}
+  nav.tabs{gap:3px;padding:2px 12px 9px}
+  .tab{padding:7px 10px;font-size:12px}
+  .card{padding:14px;border-radius:13px}
+  .stat{padding:13px}
+  .stat .v{font-size:21px}
+  .hero{padding:19px 16px}
+  .hero h1{font-size:23px}
+  table{min-width:520px}
+  .card:has(table){overflow-x:auto}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+
+/* ---------- dashboard hierarchy and on-brand policy-circuit visual ---------- */
+.hero{
+  display:grid;
+  grid-template-columns:minmax(0,1.08fr) minmax(300px,.92fr);
+  grid-template-areas:
+    "kicker visual"
+    "title visual"
+    "lead visual"
+    "cta visual"
+    "live visual"
+    "hint visual";
+  align-items:center;
+  column-gap:clamp(28px,5vw,64px);
+  row-gap:0;
+  padding:clamp(28px,4vw,48px);
+  min-height:440px;
+  overflow:hidden;
+  position:relative;
+}
+.hero:after{
+  content:"";
+  position:absolute;
+  width:390px;
+  height:390px;
+  right:20%;
+  top:-250px;
+  border:1px solid rgba(37,224,139,.08);
+  border-radius:50%;
+  pointer-events:none;
+}
+.hero>.kicker{grid-area:kicker;align-self:end;margin-bottom:13px}
+.hero>h1{grid-area:title;max-width:16ch;margin-bottom:14px;font-size:clamp(30px,3.8vw,46px);letter-spacing:-1.1px}
+.hero>.lead{grid-area:lead;max-width:58ch;line-height:1.75}
+.hero>.hero-visual{grid-area:visual}
+.hero>.cta{grid-area:cta;margin-top:24px}
+.hero>#st-live{grid-area:live}
+.hero>.hintline{grid-area:hint;max-width:56ch;margin-top:12px}
+.hero-visual{
+  min-width:0;
+  min-height:326px;
+  position:relative;
+  isolation:isolate;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:10px;
+  padding:26px;
+  overflow:hidden;
+  border:1px solid rgba(87,200,255,.2);
+  border-radius:18px;
+  background:
+    radial-gradient(300px 220px at 50% 45%,rgba(37,224,139,.09),transparent 75%),
+    linear-gradient(145deg,rgba(6,10,15,.78),rgba(10,17,25,.86));
+  box-shadow:inset 0 1px rgba(231,240,248,.035),0 24px 60px rgba(0,0,0,.24);
+}
+.hero-visual:before{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  inset:0;
+  opacity:.22;
+  background-image:linear-gradient(rgba(29,44,59,.55) 1px,transparent 1px),linear-gradient(90deg,rgba(29,44,59,.55) 1px,transparent 1px);
+  background-size:28px 28px;
+  mask-image:linear-gradient(135deg,#000,transparent 78%);
+}
+.visual-orbit{position:absolute;z-index:-1;border:1px solid rgba(87,200,255,.13);border-radius:50%;pointer-events:none}
+.orbit-one{width:260px;height:260px;right:-110px;top:-126px}
+.orbit-two{width:180px;height:180px;left:-112px;bottom:-90px;border-color:rgba(37,224,139,.13)}
+.visual-label,.visual-foot,.visual-lock,.visual-state,.visual-link span,.circuit-copy small{
+  font:10px/1.3 var(--mono);
+  letter-spacing:.8px;
+}
+.visual-label{display:flex;align-items:center;gap:8px;color:var(--dim);margin-bottom:6px}
+.visual-pulse{width:7px;height:7px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px rgba(37,224,139,.5)}
+.visual-node,.visual-circuit{display:flex;align-items:center;gap:12px;position:relative}
+.visual-node{
+  padding:13px 14px;
+  border:1px solid rgba(29,44,59,.95);
+  border-radius:12px;
+  background:linear-gradient(110deg,rgba(19,32,48,.94),rgba(10,17,25,.94));
+}
+.visual-node>span:nth-child(2){flex:1;min-width:0}
+.visual-node b,.circuit-copy b{display:block;color:var(--txt);font-size:13px;font-weight:600;letter-spacing:0}
+.visual-node small{display:block;margin-top:3px;color:var(--dim);font-size:11px}
+.visual-icon,.circuit-mark{
+  width:34px;
+  height:34px;
+  flex:0 0 34px;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(87,200,255,.17);
+  border-radius:10px;
+  background:rgba(87,200,255,.07);
+  color:var(--acc2);
+  font-size:17px;
+}
+.container-node .visual-icon{color:var(--acc);border-color:rgba(37,224,139,.2);background:rgba(37,224,139,.07)}
+.visual-lock{color:var(--dim2);font-size:9px;white-space:nowrap}
+.visual-link{height:25px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:9px;padding:0 16px}
+.visual-link i{height:1px;background:linear-gradient(90deg,rgba(37,224,139,.08),rgba(37,224,139,.42))}
+.visual-link i:last-child{background:linear-gradient(90deg,rgba(87,200,255,.42),rgba(87,200,255,.08))}
+.visual-link span{color:var(--dim2);font-size:8px;text-align:center;white-space:nowrap}
+.visual-circuit{
+  min-height:72px;
+  padding:13px 14px;
+  border:1px solid rgba(37,224,139,.34);
+  border-radius:12px;
+  background:linear-gradient(100deg,rgba(37,224,139,.1),rgba(19,32,48,.96) 52%,rgba(87,200,255,.07));
+  box-shadow:0 0 26px rgba(37,224,139,.055);
+}
+.circuit-mark{color:#04140c;border:0;background:linear-gradient(135deg,var(--acc),var(--acc2));font-size:18px}
+.circuit-copy{flex:1;min-width:0}
+.circuit-copy small{display:block;margin-top:3px;color:var(--dim);font-size:8px}
+.visual-state{color:var(--acc);font-size:8px;white-space:nowrap}
+.visual-foot{display:flex;justify-content:space-between;gap:8px;margin-top:7px;color:var(--dim2);font-size:8px}
+.hero .cta .btn{min-height:42px}
+.hero .cta .btn:not(.primary){background:rgba(10,17,25,.76)}
+h2.sec{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin:30px 0 16px;
+  font-size:17px;
+  letter-spacing:-.15px;
+}
+h2.sec:before{
+  content:"";
+  width:3px;
+  height:21px;
+  flex:0 0 3px;
+  border-radius:3px;
+  background:linear-gradient(180deg,var(--acc),var(--acc2));
+}
+h2.sec:after{content:"";height:1px;flex:1;background:linear-gradient(90deg,var(--line),transparent)}
+.view:not(#v-start)>h2.sec{margin-top:5px}
+.view:not(#v-start)>.notice:first-of-type{box-shadow:inset 3px 0 rgba(37,224,139,.5)}
+#v-overview>#ov-stats .stat{position:relative;overflow:hidden}
+#v-overview>#ov-stats .stat:after{
+  content:"";
+  position:absolute;
+  width:74px;
+  height:74px;
+  right:-27px;
+  top:-34px;
+  border:1px solid rgba(87,200,255,.13);
+  border-radius:50%;
+}
+.card h3{line-height:1.4}
+.card-h .chip{flex:0 0 auto}
+.g2,.g3,.g4{align-items:stretch}
+.g2>.card,.g3>.card,.g4>.card{height:100%}
+@media(max-width:850px){
+  .hero{
+    grid-template-columns:minmax(0,1fr);
+    grid-template-areas:"kicker" "title" "lead" "visual" "cta" "live" "hint";
+    min-height:0;
+    row-gap:0;
+    padding:clamp(22px,5vw,34px);
+  }
+  .hero-visual{width:min(100%,560px);min-height:300px;margin:26px auto 4px}
+}
+@media(max-width:520px){
+  .hero{padding:21px 16px}
+  .hero>h1{font-size:clamp(27px,8vw,34px);letter-spacing:-.8px}
+  .hero>.cta{gap:8px;margin-top:18px}
+  .hero>.cta .btn{flex:1 1 100%;justify-content:center}
+  .hero-visual{min-height:270px;padding:18px 14px;margin-top:22px}
+  .visual-foot{font-size:7px}
+  h2.sec{font-size:15px;gap:9px}
+}
 </style>
+<link rel="stylesheet" href="./styles/tapeguard-product.css">
+<!-- tapecode:contracts -->
+<script>
+window.APP_CONFIG = {
+  chainId: 1952,
+  contracts: {
+    AgentContainer: {
+      address: "0x23A28FCDFA235116e39C38d32b2e597676D03240",
+      abi: [
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "owner_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "receive",
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "ACTIVATION_PERIOD",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "acceptOwner",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "accruedFees",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "activate",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "activationFee",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "activeUntil",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "availableFunding",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "balance",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "execute",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "data",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "executions",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "info",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "policy_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "paused_",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "active_",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "activationFee_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "activeUntil_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "accruedFees_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "executions_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "nonce_",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isActive",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lastExecutionAt",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nonce",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "paused",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingOwner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "policy",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "relayers",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setActivationFee",
+    "inputs": [
+      {
+        "name": "fee",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setPaused",
+    "inputs": [
+      {
+        "name": "paused_",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setPolicy",
+    "inputs": [
+      {
+        "name": "policy_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setRelayer",
+    "inputs": [
+      {
+        "name": "relayer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "allowed",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "simulate",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "data",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "approved",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "transferOwner",
+    "inputs": [
+      {
+        "name": "next",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "withdraw",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "withdrawFees",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "Activated",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "activeUntil",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ActivationFeeSet",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Executed",
+    "inputs": [
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "target",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "selector",
+        "type": "bytes4",
+        "indexed": false,
+        "internalType": "bytes4"
+      },
+      {
+        "name": "result",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FeesWithdrawn",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Funded",
+    "inputs": [
+      {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnerChanged",
+    "inputs": [
+      {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnerTransferStarted",
+    "inputs": [
+      {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PausedSet",
+    "inputs": [
+      {
+        "name": "paused",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PolicyChecked",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "selector",
+        "type": "bytes4",
+        "indexed": false,
+        "internalType": "bytes4"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PolicySet",
+    "inputs": [
+      {
+        "name": "policy",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RelayerSet",
+    "inputs": [
+      {
+        "name": "relayer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "allowed",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Withdrawn",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AgentPaused",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ExecutionFailed",
+    "inputs": [
+      {
+        "name": "returndata",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "FeeTooLow",
+    "inputs": [
+      {
+        "name": "required",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "sent",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InsufficientBalance",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientFees",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NonCanonicalTokenCalldata",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotAContract",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotActive",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotAuthorised",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PolicyNotSet",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PolicyRejected",
+    "inputs": [
+      {
+        "name": "reason",
+        "type": "string",
+        "internalType": "string"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "Reentrancy",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RouterNotAuthorised",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TransferFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroAddress",
+    "inputs": []
+  }
+]
+    },
+    PolicyCircuit: {
+      address: "0xF1f6FA1cF62ec8B5415607eE7b0BB71Ac0905dAf",
+      abi: [
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "owner_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "CIRCUIT_ID",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "VERSION",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "actionDay",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "actionsToday",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "allowPlainTransfer",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "allowedFunctions",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "allowedTargets",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "anyFunction",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "authorisedAgents",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "authorizedRouters",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "check",
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "data",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "approved",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "checkToken",
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "approved",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "commitment",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "computeCommitment",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "dailyLimit",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lastNonce",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "maxActionsPerDay",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "maxPerAction",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "paused",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "policyDigest",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "circuitId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "commitment_",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "whitelistHash_",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "tokenHash_",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "revision_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "version_",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "policyView",
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "circuitId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "commitment_",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "paused_",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "maxPerAction_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "dailyLimit_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "spentToday_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "remainingToday_",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "recordExecution",
+    "inputs": [
+      {
+        "name": "agentNonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "tokenAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "remainingToday",
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "revision",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setAgent",
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "authorised",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setFunction",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "selector",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      },
+      {
+        "name": "allowed",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setLimits",
+    "inputs": [
+      {
+        "name": "maxPerAction_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "dailyLimit_",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setMaxActionsPerDay",
+    "inputs": [
+      {
+        "name": "maxActionsPerDay_",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setPaused",
+    "inputs": [
+      {
+        "name": "paused_",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setPlainTransfer",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "allowed",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setRouter",
+    "inputs": [
+      {
+        "name": "router",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "allowed",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setTarget",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "allowed",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "anyFn",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setTokenLimit",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "enabled",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "maxPerAction_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "dailyLimit_",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "spendDay",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "spentToday",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "tokenHash",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "tokenView",
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "enabled",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "maxPerAction_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "dailyLimit_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "spentToday_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "remainingToday_",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "whitelistHash",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "AgentSet",
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "authorised",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "CircuitLinked",
+    "inputs": [
+      {
+        "name": "circuitId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "version",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "CommitmentUpdated",
+    "inputs": [
+      {
+        "name": "commitment",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "revision",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "whitelistHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "tokenHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ExecutionRecorded",
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "tokenAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FunctionSet",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "selector",
+        "type": "bytes4",
+        "indexed": true,
+        "internalType": "bytes4"
+      },
+      {
+        "name": "allowed",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LimitsSet",
+    "inputs": [
+      {
+        "name": "maxPerAction",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "dailyLimit",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MaxActionsPerDaySet",
+    "inputs": [
+      {
+        "name": "maxActionsPerDay",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PausedSet",
+    "inputs": [
+      {
+        "name": "paused",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PlainTransferSet",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "allowed",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RouterSet",
+    "inputs": [
+      {
+        "name": "router",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "allowed",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SpendRecorded",
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "dayTotal",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TargetSet",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "allowed",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      },
+      {
+        "name": "anyFunction",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TokenLimitSet",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "enabled",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      },
+      {
+        "name": "maxPerAction",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "dailyLimit",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TokenSpendRecorded",
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "dayTotal",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "ActionsAboveLimit",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AgentNotAuthorised",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidLimits",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NonceMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SpendAboveLimit",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroAddress",
+    "inputs": []
+  }
+]
+    }
+  },
+  api: "https://tapeguard.tapeguard.workers.dev"
+};
+</script>
+<!-- /tapecode:contracts -->
 </head>
 <body>
-<header class="topbar"><div class="brand"><div class="mark">✓</div><div><b>TapeGuard</b><small>PolicyCircuit control plane</small></div></div><div class="top-right"><span><i class="pulse"></i> X Layer Testnet · Chain 1952</span><button class="wallet">Connect wallet</button></div></header>
-<main class="content">
-<div class="heading"><div><div class="eyebrow">● Live monitoring · last sync 12 sec ago</div><h1>Agent command center</h1><p>Real-time oversight for your TapeOut execution container.</p></div><div class="heading-actions"><span class="badge allow"><i class="dot"></i> Circuit active</span><button class="outline" id="pause">Pause policy</button></div></div>
-<div class="kpis"><div class="card kpi green-glow"><div class="label">Container balance</div><div class="value">$9,084.20</div><div class="meta positive">↗ +7.8% <span>vs. yesterday</span></div><div class="gauge"><span style="width:72%"></span></div></div><div class="card kpi"><div class="label">24h volume / $10,000 cap</div><div class="value">$7,420</div><div class="meta"><b style="color:#fbbf24">74.2%</b> utilized</div><div class="gauge yellow"><span style="width:74.2%"></span></div></div><div class="card kpi"><div class="label">Actions allowed</div><div class="value">337</div><div class="meta positive">↗ 92.4% <span>approval rate</span></div></div><div class="card kpi"><div class="label">Actions rejected</div><div class="value">28</div><div class="meta negative">↘ 7.6% <span>blocked by circuit</span></div></div><div class="card kpi"><div class="label">Policy status</div><div class="status"><div class="shield">✓</div><div><div class="active" id="policyStatus">ACTIVE</div><div class="sub">v2.4.1 · owner enforced</div></div></div></div></div>
-<div class="grid"><section class="card card-pad"><div class="title-row"><div><div class="eyebrow">Container telemetry</div><h2>Container balance over time</h2></div><span class="badge allow"><i class="dot"></i> Live</span></div><div class="chart-stat"><strong>$9,084.20</strong><span class="positive small">+$664.20 (+7.8%)</span></div><div class="chart"><canvas id="balanceChart"></canvas></div><div class="chart-foot"><span>━ Balance</span><span>Target floor <b>$8,500</b></span><span>Source <b>PolicyCircuit</b></span></div></section><section class="card card-pad"><div class="title-row"><div><div class="eyebrow">Active guardrails</div><h2>What TapeGuard is enforcing</h2></div></div><div class="guardrails"><div class="guard"><div class="guard-icon">✓</div><div><strong>Per-action limit</strong><span>Maximum allowed per execution</span></div><b>$500.00</b></div><div class="guard"><div class="guard-icon">✓</div><div><strong>Daily volume cap</strong><span>Rolling 24-hour spend ceiling</span></div><b>$10,000</b></div><div class="guard"><div class="guard-icon">✓</div><div><strong>Allowlisted targets</strong><span>Contracts that can receive funds</span></div><b>4 targets</b></div><div class="guard"><div class="guard-icon">✓</div><div><strong>Owner controls</strong><span>Pause, update rules, withdraw</span></div><span class="badge allow">ENFORCED</span></div></div><div class="note">✦ Every action is checked atomically before it reaches the container.</div></section></div>
-<div class="section"><div><div class="eyebrow">Decision intelligence</div><h2>Action throughput</h2></div><div class="legend"><span><i style="background:var(--green)"></i>Allowed</span><span><i style="background:var(--red)"></i>Rejected</span></div></div>
-<div class="charts"><section class="card mini"><h3>Allowed vs. rejected actions</h3><p>Last 7 days · 365 total decisions</p><div class="mini-chart"><canvas id="actionsChart"></canvas></div></section><section class="card mini"><div class="title-row"><div><h3>Policy check latency</h3><p>Median decision time · milliseconds</p></div><b style="font-size:22px">81<small style="color:var(--muted);font-size:11px"> ms</small></b></div><div class="mini-chart"><canvas id="latencyChart"></canvas></div></section></div>
-<div class="bottom"><section class="card feed"><div class="title-row"><div><div class="eyebrow">Audit stream</div><h2>Recent decisions</h2></div><span class="sub">View full log ↗</span></div><div class="log" id="log"></div></section><section class="card sim"><div class="title-row"><div><div class="eyebrow">Demo mode</div><h2>Policy simulator</h2></div><span class="badge neutral">DRY RUN</span></div><p>Test how the PolicyCircuit responds before an action is submitted.</p><div class="fields"><label>Amount (USD)<input id="amount" value="420" inputmode="decimal"></label><label>Target contract<input id="target" value="0x7a...91c2"></label></div><div class="verdict ok" id="verdict"><div class="verdict-top"><div><div class="eyebrow">Simulation result</div><h3 id="verdictText">ALLOW</h3></div><b style="font-size:24px">✓</b></div><p id="reason">Target is allowlisted and within the daily volume cap.</p><div class="limit"><span>Per-action limit</span><span id="limitText">$420 / $500</span></div><div class="simulator-progress"><span id="progress" style="width:84%"></span></div></div><button class="simulate" id="simulate">Run policy check ↗</button></section></div>
-<footer><span><b style="color:#a1a1aa">✓ TapeGuard</b> · PolicyCircuit is the execution boundary — not a suggestion.</span><span><i class="pulse"></i> All systems operational</span></footer>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand">
+      <div class="logo">◈</div>
+      <div>
+        <strong>TapeGuardian</strong>
+        <div class="sub">An always-on crypto agent that can only do what you allow</div>
+      </div>
+    </div>
+    <button class="btn primary sm needs-wallet" id="btn-wallet">Connect wallet</button>
+  </div>
+  <div class="top-chips">
+    <span class="chip" id="chip-mode">…</span>
+    <span class="chip" id="chip-chain">…</span>
+  </div>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-view="start">Start here</button>
+    <button class="tab" data-view="overview">Overview</button>
+    <button class="tab" data-view="policy">Policy circuit</button>
+    <button class="tab" data-view="daemon">Daemon</button>
+    <button class="tab" data-view="autonomy">Autonomy</button>
+    <button class="tab" data-view="container">Container</button>
+    <button class="tab" data-view="revenue">Revenue</button>
+    <button class="tab" data-view="contracts">Contract</button>
+    <button class="tab" data-view="docs">Docs</button>
+  </nav>
+</header>
+
+<div class="wrap"><div id="notice" class="notice" hidden></div></div>
+
+<!-- wallet chooser: on a phone there is usually no injected wallet, so we offer the
+     wallet's own in-app browser (universal links) as well as any injected provider -->
+<div class="sheet-bd hidden" id="wallet-sheet">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ws-title">
+    <button class="btn sm" id="ws-x" style="position:absolute;top:10px;right:12px;width:34px;height:34px;padding:0;justify-content:center" aria-label="Close">✕</button>
+    <h3 id="ws-title" style="margin-right:26px">Connect a wallet</h3>
+    <div class="sub" id="ws-sub">Choose how you want to connect. On a phone this opens your wallet app, which then loads this page inside it and connects automatically.</div>
+    <div id="ws-list"></div>
+    <div class="divider">open in your wallet</div>
+    <p class="wlink">No typing, no copying. Tap <b>Share this page</b> and pick your wallet's browser from the share sheet — the page opens there and you tap Connect. Or tap one of the wallet buttons below.</p>
+    <div class="row" style="margin:0 0 8px">
+      <button class="btn primary sm" id="ws-share">Share this page</button>
+    </div>
+    <div class="row">
+      <button class="btn sm" id="ws-public">Continue without a wallet (read-only)</button>
+      <button class="btn sm danger" id="ws-close">Close</button>
+    </div>
+  </div>
+</div>
+
+
+<main class="wrap">
+
+<!-- ============ START HERE (plain-language landing) ============ -->
+<section class="view active" id="v-start">
+  <div class="hero">
+    <div class="kicker">TapeGuardian · an autonomous agent with rules you set</div>
+    <h1>Your crypto can work for you at 3am — without you handing over the keys.</h1>
+    <p class="lead">
+      TapeGuardian is an <b>autonomous agent</b> — think of a robot trader that comes with a rulebook
+      written into the blockchain itself. You decide the limits once: how much it may move per trade,
+      how much per day, which exchange it may use, and how far your balance may drift.
+      Then it runs <b>non-stop, on its own</b> — and it physically <b>cannot</b> go past your rules,
+      even if someone steals the key it runs with.
+    </p>
+    <div class="hero-visual" aria-hidden="true">
+      <div class="visual-orbit orbit-one"></div>
+      <div class="visual-orbit orbit-two"></div>
+      <div class="visual-label"><span class="visual-pulse"></span> PROTECTED EXECUTION</div>
+      <div class="visual-node owner-node">
+        <span class="visual-icon">⌘</span>
+        <span><b>Owner rules</b><small>Limits · targets · pause</small></span>
+        <span class="visual-lock">OWNER</span>
+      </div>
+      <div class="visual-link"><i></i><span>POLICY CHECK</span><i></i></div>
+      <div class="visual-circuit">
+        <span class="circuit-mark">◈</span>
+        <span class="circuit-copy"><b>PolicyCircuit</b><small>ON-CHAIN RULE ENGINE</small></span>
+        <span class="visual-state">ENFORCED</span>
+      </div>
+      <div class="visual-link"><i></i><span>APPROVED ONLY</span><i></i></div>
+      <div class="visual-node container-node">
+        <span class="visual-icon">◇</span>
+        <span><b>Keyless container</b><small>Funds stay owner-controlled</small></span>
+        <span class="visual-lock">NO KEY</span>
+      </div>
+      <div class="visual-foot"><span>RULES FIRST</span><span>EVERY ACTION CHECKED</span></div>
+    </div>
+    <div class="cta">
+      <button class="btn primary" data-goto="overview">See it work in 60 seconds</button>
+      <button class="btn" data-goto="policy">Set my rules</button>
+      <button class="btn" data-goto="autonomy">Turn on the 24/7 agent</button>
+      <button class="btn" data-goto="docs">Read the longer guide</button>
+    </div>
+    <div class="row mt" id="st-live" style="margin-top:14px"></div>
+    <div class="hintline">No wallet needed to look around. Nothing here can move money until you deploy the contracts and connect a wallet yourself.</div>
+  </div>
+
+  <div class="grid g2" style="margin-bottom:14px">
+    <div class="card">
+      <div class="card-h"><h3>The 20-second version</h3><span class="chip">what this is</span></div>
+      <p class="qline"><b>Problem:</b> to trade automatically, a bot normally needs your private key. That key is unlimited power — one leak drains everything, and you can never prove afterwards what it was allowed to do.</p>
+      <p class="qline"><b>What TapeGuardian does:</b> instead of trusting a key, the <b>rules are enforced by a small program on the blockchain</b>. The bot runs with a key that can only push actions those rules already allow. Steal that key and you still cannot spend more than the daily limit, cannot use a non-approved exchange, and cannot touch the owner's money.</p>
+      <p class="qline"><b>What you get:</b> trading that keeps going while you sleep, provable limits, a stop button in the app, and a second, permanent stop switch on-chain.</p>
+      <p class="qline"><b>Cost:</b> a one-off activation fee (5 USDT in this build) plus a small cut of what it earns, both paid into an account <b>you</b> control.</p>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Why people use it</h3><span class="chip">the actual benefit</span></div>
+      <div class="strip">
+        <div class="it"><span class="m">🌙</span><span><b class="x" style="color:var(--txt);display:block;margin-bottom:2px">The market does not sleep, you do.</b><span class="x">Price triggers and rebalancing fire at any hour, without you sitting at a screen.</span></span></div>
+        <div class="it"><span class="m">🔒</span><span><b class="x" style="color:var(--txt);display:block;margin-bottom:2px">You keep the keys.</b><span class="x">Your money sits in an account with no private key. The bot's own key is a delivery boy with a spending limit, not an owner.</span></span></div>
+        <div class="it"><span class="m">🧾</span><span><b class="x" style="color:var(--txt);display:block;margin-bottom:2px">Nothing happens in the dark.</b><span class="x">Every decision — including every refusal — is listed in plain language and recorded, so you can check it later.</span></span></div>
+        <div class="it"><span class="m">⏹️</span><span><b class="x" style="color:var(--txt);display:block;margin-bottom:2px">Stopping is instant.</b><span class="x">One button pauses the agent in the app; another switch freezes it on-chain even if the server is compromised.</span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">How it works — four steps, no jargon</h2>
+  <div class="steps" style="margin-bottom:14px">
+    <div class="st"><div class="n">1</div><h4>Write your rules</h4><p>One screen: maximum per trade, maximum per day, how much the balance may drift from your target, and which exchange address it is allowed to talk to. Anything not on the list is impossible.</p></div>
+    <div class="st"><div class="n">2</div><h4>Fund the agent's account</h4><p>You send money to an account that belongs to you but has <b>no private key at all</b>. It can only ever move funds through your rulebook, so there is nothing to steal from it.</p></div>
+    <div class="st"><div class="n">3</div><h4>Turn the agent on</h4><p>A small always-on program (the daemon) checks the market every minute, asks the rulebook "am I allowed to do this?", and only then acts. If nothing is worth doing, it does nothing and logs that too.</p></div>
+    <div class="st"><div class="n">4</div><h4>Watch it, pause it, withdraw it</h4><p>You see the live balance, every action and every refusal. Pause any time, change the limits any time, and withdraw your funds whenever you like — including the fees it earned for you.</p></div>  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-h"><h3>What it will never do</h3><span class="chip ok">enforced on-chain</span></div>
+      <ul class="docs" style="font-size:13px">
+        <li>Move <b>more than your per-trade or per-day limit</b> — the check happens inside the same transaction as the trade.</li>
+        <li>Trade on an <b>exchange or token you did not allow</b>.</li>
+        <li>Spend the <b>fees it collected for you</b> — that money is reserved and can only go to your address.</li>
+        <li>Keep going after you hit <b>Stop</b>, or after its <b>paid period ends</b>.</li>
+        <li>Change the rules to give itself more room — only the owner (your account) can do that.</li>
+      </ul>
+      <div class="hintline">These are not promises in a document: they are the code the agent runs against, and you can verify each one on-chain.</div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Words used on this page</h3><span class="chip">tap to open</span></div>
+      <details class="gloss"><summary>Rules / "policy circuit"</summary><p>The rulebook. It is a tiny program on the blockchain, owned by your account, that says yes or no to every action. Because it lives on-chain, nobody — not even the people who built this site — can quietly change it.</p></details>
+      <details class="gloss"><summary>Agent</summary><p>A program that acts on your behalf without you watching. Every trading bot is an agent; what makes this one different is that its limits are enforced by the blockchain rather than by its own good behaviour.</p></details>
+      <details class="gloss"><summary>The agent's account / "container"</summary><p>The wallet that actually holds the money. It has <b>no private key</b>, so it cannot be "hacked" in the usual sense: the only way for money to leave is a call that the rulebook approves.</p></details>
+      <details class="gloss"><summary>The agent's always-on part / "daemon"</summary><p>A small program running on a server, not in your browser. That is the whole point: it keeps working when your phone is off. It only ever decides, asks permission and submits; it cannot change your rules or withdraw.</p></details>
+      <details class="gloss"><summary>"Keeper" / "relayer key"</summary><p>The low-power key the agent uses to send actions. Think of it as a courier: it can carry a package the rulebook approved, it cannot sign a new one, cannot change limits and holds no funds. If it ever leaks, you revoke it and the loss is capped by your daily limit.</p></details>
+      <details class="gloss"><summary>Trigger</summary><p>A reason to act: "OKB dropped below $42", "check every 5 minutes", or "my balance drifted 5% away from my target". No trigger, no action.</p></details>
+      <details class="gloss"><summary>"Demo simulation"</summary><p>When the contracts are not deployed yet, this page runs the whole cycle with a faithful local copy of the rulebook, so you can see exactly how it behaves before spending anything. It is labelled clearly wherever it is active.</p></details>
+    </div>
+  </div>
+
+  <div class="card mt">
+    <div class="card-h"><h3>Honest expectations</h3><span class="chip warn">read this before funding</span></div>
+    <ul class="docs" style="font-size:13px">
+      <li><b>It is a trader, not a savings account.</b> Automated trading can lose money on a bad trade; the limits cap how much, they do not make profit.</li>
+      <li><b>Small on-chain bills.</b> You pay gas to create the rulebook, the account and its wiring, plus the activation fee. Every number is itemised before you confirm.</li>
+      <li><b>The agent needs a reachable server.</b> Its always-on part runs on a Worker that must be deployed; if it is offline, nothing is lost — actions wait in a queue and are re-checked before they are sent.</li>
+      <li><b>You are always the owner.</b> Whatever happens to the server, control of the rules and the funds stays with your account.</li>
+    </ul>
+    <div class="row mt">
+      <button class="btn primary sm" data-goto="autonomy">Go to the 24/7 agent</button>
+      <button class="btn sm" data-goto="revenue">See how it earns</button>
+      <button class="btn sm" data-goto="docs">Deployment &amp; technical detail</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ OVERVIEW ============ -->
+<section class="view" id="v-overview">
+  <section class="mission-intro" aria-labelledby="mission-title">
+    <div class="mission-copy">
+      <div class="mission-eyebrow"><span class="mission-pulse"></span> AUTONOMOUS SECURITY · X LAYER</div>
+      <h1 id="mission-title">Autonomy without unrestricted access.</h1>
+      <p> TapeGuardian monitors opportunities, evaluates every proposed action against your on-chain rules, and only then allows the container execution path.</p>
+    </div>
+    <div class="mission-proof">
+      <span class="proof-label">THE GUARDED EXECUTION PATH</span>
+      <div class="pipeline" aria-label="Market signal to agent decision to policy circuit to container execution">
+        <div class="pipeline-step"><span class="pipeline-index">01</span><b>Market signal</b><small>Observe</small></div>
+        <span class="pipeline-arrow" aria-hidden="true">→</span>
+        <div class="pipeline-step"><span class="pipeline-index">02</span><b>Agent decision</b><small>Propose</small></div>
+        <span class="pipeline-arrow" aria-hidden="true">→</span>
+        <div class="pipeline-step pipeline-gate"><span class="pipeline-index">03</span><b>Policy circuit</b><small>Authorize</small></div>
+        <span class="pipeline-arrow" aria-hidden="true">→</span>
+        <div class="pipeline-step"><span class="pipeline-index">04</span><b>Container</b><small>Execute</small></div>
+      </div>
+      <div class="proof-foot"><span>Every action is checked before execution.</span><span class="proof-lock">◈ OWNER-DEFINED RULES</span></div>
+    </div>
+  </section>
+  <div class="section-intro"><div><span class="section-kicker">SYSTEM OVERVIEW</span><h2>Mission control</h2></div><p>Live state, market signals and verifiable activity in one place.</p></div>
+  <div class="grid g4" id="ov-stats"></div>
+  <div class="grid g2 chart-strip">
+    <div class="card chart-card">
+      <div class="card-h"><h3>Container balance over time</h3><span class="chip ok">Worker data + fallback</span></div>
+      <div class="chart-box"><canvas id="balance-history-chart"></canvas></div>
+    </div>
+    <div class="card chart-card">
+      <div class="card-h"><h3>Allowed vs rejected actions</h3><span class="chip">/api/log</span></div>
+      <div class="chart-box"><canvas id="decision-actions-chart"></canvas></div>
+    </div>
+  </div>
+  <div class="grid g2 chart-strip">
+    <div class="card chart-card chart-small-card">
+      <div class="card-h"><h3>Policy check latency</h3><span class="chip">demo baseline</span></div>
+      <div class="chart-box"><canvas id="decision-latency-chart"></canvas></div>
+    </div>
+  </div>
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-h"><h3>Trigger stream · OKB/USD</h3><span class="chip" id="ov-price">--</span></div>
+      <canvas id="price-chart" height="130"></canvas>
+      <div class="row small dim mt" id="ov-market"></div>
+      <div class="row mt dangerous">
+        <button class="btn ghost sm" id="btn-nudge">Nudge market −0.30</button>
+        <button class="btn ghost sm" id="btn-demo-happy">Run happy-path demo</button>
+        <button class="btn danger sm" id="btn-demo-rogue">Propose rogue action (expect reject)</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Activity feed</h3><span class="chip" id="ov-act">0 events</span></div>
+      <div class="row small" style="margin-bottom:8px">
+        <button class="btn sm" data-filter="all">All</button>
+        <button class="btn sm" data-filter="TRIGGER">Triggers</button>
+        <button class="btn sm" data-filter="POLICY">Policy</button>
+        <button class="btn sm" data-filter="EXEC">Executions</button>
+        <button class="btn sm" data-filter="REJECT">Rejections</button>
+      </div>
+      <div class="feed" id="ov-feed"></div>
+      <div class="row mt">
+        <button class="btn ghost sm" id="btn-export">Export evidence JSON</button>
+        <button class="btn ghost sm dangerous" id="btn-clear-log">Clear feed</button>
+      </div>
+    </div>
+  </div>
+  <div class="grid g3" id="ov-cards"></div>
+</section>
+
+<!-- ============ POLICY ============ -->
+<section class="view" id="v-policy">
+  <h2 class="sec">Policy circuit — the rule engine the agent can never bypass</h2>
+  <div class="notice ok" style="margin:0 0 12px">
+    <b>This is your rulebook.</b> Every action the agent takes has to pass these checks, inside the same
+    transaction as the trade. Nothing here is advice — a call that breaks a rule simply fails. Change a
+    number and it applies to the very next action.
+  </div>
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-h"><h3>Circuit identity</h3><span class="chip" id="pol-mode"></span></div>
+      <div id="pol-identity"></div>
+      <div class="row mt">
+        <button class="btn ghost sm" data-copy-target="circuit">Copy circuit ID</button>
+        <button class="btn ghost sm" data-copy-target="container">Copy container</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Spending rules</h3><span class="chip" id="pol-window"></span></div>
+      <div id="pol-rules"></div>
+      <div class="row mt dangerous">
+        <button class="btn sm" id="btn-toggle-pause">Pause / unpause circuit</button>
+        <button class="btn sm" id="btn-edit-policy">Edit limits</button>
+      </div>
+      <div id="pol-edit" class="mt" style="display:none">
+        <div class="grid g3" style="margin:0 0 8px">
+          <div><label class="f">Max per transaction (OKB)</label><input id="in-maxtx"></div>
+          <div><label class="f">Rolling 24h volume cap (OKB)</label><input id="in-daily"></div>
+          <div><label class="f">Expiry (days, 0 = none)</label><input id="in-expiry"></div>
+        </div>
+        <div class="row"><button class="btn primary sm" id="btn-save-policy">Save to circuit</button><button class="btn sm" id="btn-cancel-policy">Cancel</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-h"><h3>Allowed targets (whitelist)</h3><span class="chip" id="pol-al-count"></span></div>
+      <table id="pol-allowlist"></table>
+      <div class="mt dangerous">
+        <div class="grid g3" style="margin:0 0 8px">
+          <div><label class="f">Label</label><input id="al-label" placeholder="X Layer DEX router"></div>
+          <div><label class="f">Target address</label><input id="al-target" placeholder="0x…"></div>
+          <div><label class="f">Selectors (comma, optional)</label><input id="al-sel" placeholder="0x7ff36ab5"></div>
+        </div>
+        <button class="btn sm" id="btn-add-target">Add target</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Policy simulator</h3><span class="chip">evaluates before execution</span></div>
+      <div class="grid g2" style="margin:0 0 8px">
+        <div><label class="f">Target</label><select id="sim-target"></select></div>
+        <div><label class="f">Amount (OKB)</label><input id="sim-value" value="0.30"></div>
+      </div>
+      <div class="grid g2" style="margin:0 0 8px">
+        <div><label class="f">Function selector</label><input id="sim-sel" value="0x7ff36ab5"></div>
+        <div><label class="f">Memo</label><input id="sim-memo" value="DCA buy via daemon"></div>
+      </div>
+      <div class="row"><button class="btn primary sm" id="btn-evaluate">Evaluate against circuit</button><button class="btn sm" id="btn-preview-calldata">Build execution request</button></div>
+      <div id="sim-out" class="mt"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Agent mission demo</h3><span class="chip ok">3 scenarios</span></div>
+      <p class="small" style="margin:0 0 10px">The agent received a rebalancing mission. It proposes three actions. The PolicyCircuit decides which ones it is allowed to execute — in real time, on X Layer.</p>
+      <div id="demo-scenarios">
+        <div class="demo-scenario" data-idx="0">
+          <div class="scenario-header">
+            <span class="pill EXEC">Scenario 1</span>
+            <span class="scenario-title">Small rebalance — within daily cap</span>
+          </div>
+          <div class="scenario-desc small dim">Agent proposes buying 0.5 OKB to restore the 60/40 target weight. Amount is within the 1 OKB per-trade and 5 OKB daily limit.</div>
+          <button class="btn primary sm scenario-run" data-value="0.5" data-memo="Rebalance: buy OKB to restore 60/40 target">▶ Run this scenario</button>
+          <div class="scenario-out"></div>
+        </div>
+        <div class="demo-scenario" data-idx="1" style="margin-top:10px">
+          <div class="scenario-header">
+            <span class="pill REJECT">Scenario 2</span>
+            <span class="scenario-title">Oversized trade — exceeds per-trade cap</span>
+          </div>
+          <div class="scenario-desc small dim">Agent proposes moving 10 OKB in a single trade. The PolicyCircuit rejects it — the per-trade limit is 1 OKB. The server is fully compromised in this scenario; it still cannot execute.</div>
+          <button class="btn danger sm scenario-run" data-value="10" data-memo="Oversized trade attempt: 10 OKB single swap">▶ Run this scenario</button>
+          <div class="scenario-out"></div>
+        </div>
+        <div class="demo-scenario" data-idx="2" style="margin-top:10px">
+          <div class="scenario-header">
+            <span class="pill REJECT">Scenario 3</span>
+            <span class="scenario-title">Rogue target — unlisted contract</span>
+          </div>
+          <div class="scenario-desc small dim">Agent proposes calling an arbitrary contract address not on the whitelist. Even a valid amount is rejected — the target is not authorised on the PolicyCircuit.</div>
+          <button class="btn danger sm scenario-run" data-value="0.3" data-target-override="0x000000000000000000000000000000000000dEaD" data-memo="Rogue action: call unlisted contract">▶ Run this scenario</button>
+          <div class="scenario-out"></div>
+        </div>
+      </div>
+      <div class="small dim mt" style="margin-top:14px">Each scenario loads the values into the simulator above and evaluates immediately. Results are real circuit checks — not mocked.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DAEMON ============ -->
+<section class="view" id="v-daemon">
+  <h2 class="sec">Background daemon — trigger → policy check → container execution</h2>
+  <div class="notice" style="margin:0 0 12px">
+    <b>What you are looking at:</b> a practice run of the agent inside this browser tab, so you can
+    watch it think. The actions are real decisions, but in this tab they are simulated. The agent that
+    keeps working while your phone is off is on the <b>Autonomy</b> tab.
+  </div>
+  <div class="grid g4" id="dm-stats"></div>
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-h"><h3>Daemon control</h3><span class="chip" id="dm-status">stopped</span></div>
+      <div class="row">
+        <button class="btn primary" id="btn-start-daemon">Start daemon</button>
+        <button class="btn danger" id="btn-stop-daemon">Stop daemon</button>
+        <button class="btn ghost sm" id="btn-tick">Force one tick</button>
+      </div>
+      <div class="mt small dim">Restart-safe: desired state, tick counter and every decision are persisted locally, so a reload resumes the daemon and writes a resume entry into the log.</div>
+      <div id="dm-timeline" class="mt"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Triggers</h3><span class="chip" id="dm-tg-count"></span></div>
+      <div id="dm-triggers"></div>
+      <h4>Add trigger</h4>
+      <div class="grid g2" style="margin:0 0 8px">
+        <div><label class="f">Type</label><select id="tg-type">
+          <option value="price">Price threshold (OKB/USD)</option>
+          <option value="time">Time interval</option>
+          <option value="block">Block interval</option>
+          <option value="event">TapeOut on-chain event</option>
+        </select></div>
+        <div><label class="f">Name</label><input id="tg-name" value="DCA guard"></div>
+      </div>
+      <div class="grid g3" style="margin:0 0 8px">
+        <div><label class="f">Condition (≤ price / seconds / blocks)</label><input id="tg-cond" value="41.50"></div>
+        <div><label class="f">Amount (OKB)</label><input id="tg-amount" value="0.20"></div>
+        <div><label class="f">Cooldown (s)</label><input id="tg-cooldown" value="30"></div>
+      </div>
+      <div class="grid g2" style="margin:0 0 8px">
+        <div><label class="f">Target</label><select id="tg-target"></select></div>
+        <div><label class="f">Memo</label><input id="tg-memo" value="daemon action"></div>
+      </div>
+      <button class="btn primary sm" id="btn-add-trigger">Add trigger</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>Decision log</h3><span class="chip" id="dm-log-count"></span></div>
+    <div class="feed" id="dm-feed"></div>
+  </div>
+</section>
+
+<!-- ============ CONTAINER ============ -->
+<section class="view" id="v-container">
+  <h2 class="sec">Circuit container — the keyless on-chain account that holds the funds</h2>
+  <div class="grid g3" id="ct-stats"></div>
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-h"><h3>Container account</h3><span class="chip" id="ct-kind"></span></div>
+      <div id="ct-address"></div>
+      <div class="row mt"><button class="btn ghost sm" data-copy-target="container">Copy address</button><button class="btn ghost sm" id="btn-refresh-chain">Refresh from chain</button></div>
+      <h4>Fund the container</h4>
+      <div class="grid g2" style="margin:0 0 8px">
+        <div><label class="f">Asset</label><select id="fund-asset"><option>OKB</option><option>USDT</option></select></div>
+        <div><label class="f">Amount</label><input id="fund-amount" value="2.0"></div>
+      </div>
+      <button class="btn primary sm needs-wallet" id="btn-fund">Fund container</button>
+      <div class="small dim mt">The agent has no private key: it can only move funds through the policy circuit. The container address is the only signer-like actor.</div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Execution requests</h3><span class="chip" id="ct-pending-count">0 pending</span></div>
+      <div id="ct-pending"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>Container transaction history</h3><span class="chip" id="ct-tx-count"></span></div>
+    <table id="ct-txs"></table>
+  </div>
+</section>
+
+<!-- ============ REVENUE ============ -->
+<section class="view" id="v-revenue">
+  <h2 class="sec">Commercial path — usage fees and revenue that flows to the container</h2>
+  <div class="grid g3" id="rv-stats"></div>
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-h"><h3>Activation</h3><span class="chip" id="rv-active"></span></div>
+      <div id="rv-activate"></div>
+      <h4>Performance fee on executed volume</h4>
+      <div class="grid g2" style="margin:0 0 8px">
+        <div><label class="f">Fee (basis points of volume)</label><input id="rv-bps" value="20"></div>
+        <div><label class="f">→ credited to</label><input value="circuit container" disabled></div>
+      </div>
+      <button class="btn primary sm" id="btn-save-bps">Update fee</button>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Fee ledger</h3><span class="chip" id="rv-ledger-total"></span></div>
+      <table id="rv-ledger"></table>
+      <h4>Revenue projection</h4>
+      <div class="grid g3" style="margin:0 0 8px">
+        <div><label class="f">Executions / day</label><input id="rv-execs" value="40"></div>
+        <div><label class="f">Avg volume (OKB)</label><input id="rv-vol" value="0.5"></div>
+        <div><label class="f">OKB price (USD)</label><input id="rv-px" value="44"></div>
+      </div>
+      <div id="rv-proj" class="mt"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONTRACT (generic) ============ -->
+<section class="view" id="v-contracts">
+  <h2 class="sec">Contract state &amp; functions</h2>
+  <div id="ct-notice"></div>
+  <div id="ct-contracts"></div>
+</section>
+
+<!-- ============ AUTONOMY (server daemon) ============ -->
+<section class="view" id="v-autonomy">
+  <h2 class="sec">Autonomy — the agent that keeps working when you close this tab</h2>
+  <div id="au-notice"></div>
+  <div class="grid g4" id="au-stats"></div>
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-h"><h3>Always-on daemon</h3><span class="chip" id="au-mode">checking…</span></div>
+      <div id="au-status"></div>
+      <div class="row mt"><button class="btn ghost sm" id="btn-au-refresh">Refresh</button><button class="btn primary sm needs-wallet" id="btn-au-tick">Run one cycle now</button></div>
+      <h4>Owner control plane</h4>
+      <div id="au-auth"></div>
+      <div class="row mt">
+        <button class="btn sm" id="btn-au-arm">Release kill switch</button>
+        <button class="btn sm danger" id="btn-au-kill">Engage kill switch</button>
+      </div>
+      <div class="small dim mt">The kill switch stops execution but keeps the daemon observing and queueing. Nothing on chain changes: the policy circuit is still the only thing that can approve a spend.</div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Rebalancing strategy</h3><span class="chip" id="au-drift-chip"></span></div>
+      <div id="au-alloc"></div>
+      <div class="grid g2" style="margin:0 0 8px">
+        <div><label class="f">AgentContainer address</label><input id="au-container" placeholder="0x… (deployed container)"></div>
+        <div><label class="f">PolicyCircuit address</label><input id="au-policy" placeholder="0x… (deployed policy)"></div>
+      </div>
+      <div class="grid g3" style="margin:0 0 8px">
+        <div><label class="f">Target OKB weight (bps)</label><input id="au-target" value="6000"></div>
+        <div><label class="f">Drift band (bps)</label><input id="au-drift" value="500"></div>
+        <div><label class="f">Max trades / day</label><input id="au-maxtrades" value="6"></div>
+      </div>
+      <div class="grid g3" style="margin:0 0 8px">
+        <div><label class="f">Min trade (OKB)</label><input id="au-mintrade" value="0.01"></div>
+        <div><label class="f">Cooldown (s)</label><input id="au-cooldown" value="300"></div>
+        <div><label class="f">Slippage (bps)</label><input id="au-slip" value="150"></div>
+      </div>
+      <div class="grid g2" style="margin:0 0 8px">
+        <div><label class="f">DEX router (whitelisted target)</label><input id="au-router" placeholder="0x…"></div>
+        <div><label class="f">Wrapped OKB</label><input id="au-wokb" placeholder="0x…"></div>
+      </div>
+      <div class="grid g2" style="margin:0 0 8px">
+        <div><label class="f">USDT token</label><input id="au-usdt" placeholder="0x…"></div>
+        <div><label class="f">USDT decimals</label><input id="au-usdtdec" value="6"></div>
+      </div>
+      <div class="row"><button class="btn primary sm" id="btn-au-save">Save strategy</button><button class="btn ghost sm" id="btn-au-demo-cfg">Fill demo values</button></div>
+      <div class="small dim mt">Path sell = [wrapped OKB → USDT], path buy = [USDT → wrapped OKB]. Both are built from the two addresses above; the router, the paths and the swap selectors must also be whitelisted on the policy circuit or every trade is rejected on chain.</div>
+      <div class="notice ok" style="margin-top:10px;font-size:12.5px">
+        <b>In plain words.</b> Target weight is how much of your money you want in OKB — 6000 bps means
+        60% OKB and 40% USDT. Drift band is how far it may wander before the agent acts — 500 bps means
+        "leave it alone until it is 5% off". Max trades per day is a hard brake. Minimum trade stops it
+        wasting fees on dust. Slippage is how much worse than the quoted price a trade may end up before
+        it is refused. You do not have to get these perfect: nothing can exceed them, and you can change
+        them any time.
+      </div>
+    </div>
+  </div>
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-h"><h3>Rules the daemon runs</h3><span class="chip" id="au-rule-count"></span></div>
+      <div id="au-rules"></div>
+      <h4>Add rule</h4>
+      <div class="grid g3" style="margin:0 0 8px">
+        <div><label class="f">Kind</label><select id="au-rule-kind">
+          <option value="rebalance">rebalance (act when my balance drifts)</option>
+          <option value="price">price threshold (act when OKB hits a price)</option>
+          <option value="interval">interval (act every so often)</option>
+        </select></div>
+        <div><label class="f">Name</label><input id="au-rule-name" value="Portfolio guard"></div>
+        <div><label class="f">Cooldown (s)</label><input id="au-rule-cooldown" value="300"></div>
+      </div>
+      <div class="grid g3" style="margin:0 0 8px">
+        <div><label class="f">Condition (price / seconds)</label><input id="au-rule-cond" value="40"></div>
+        <div><label class="f">Op (price rules)</label><select id="au-rule-op"><option value="<=">≤</option><option value=">=">≥</option></select></div>
+        <div><label class="f">Action</label><select id="au-rule-action">
+          <option value="rebalance">rebalance to target</option>
+          <option value="buy">buy OKB</option>
+          <option value="sell">sell OKB</option>
+        </select></div>
+      </div>
+      <div class="grid g2" style="margin:0 0 8px">
+        <div><label class="f">Amount (USD, for buy/sell)</label><input id="au-rule-amount" value="5"></div>
+        <div><label class="f">Interval action</label><select id="au-rule-iaction"><option value="rebalance">rebalance</option><option value="buy">buy OKB</option><option value="sell">sell OKB</option></select></div>
+      </div>
+      <button class="btn primary sm" id="btn-au-add-rule">Add rule</button>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Relayer (keeper) authorisation</h3><span class="chip" id="au-relayer-chip"></span></div>
+      <div id="au-relayer"></div>
+      <div class="row mt"><button class="btn ghost sm" data-copy-target="relayer">Copy relayer address</button><button class="btn ghost sm" id="btn-au-relayer-calldata">Build setRelayer calldata</button></div>
+      <div id="au-relayer-out" class="mt"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>Server decision log (survives you closing the tab)</h3><span class="chip" id="au-log-count"></span></div>
+    <div class="feed" id="au-log"></div>
+  </div>
+</section>
+
+<!-- ============ DOCS ============ -->
+<section class="view" id="v-docs">
+  <h2 class="sec">Deployment, wiring and demo script</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>Architecture</h3>
+      <ul class="docs">
+        <li><b>Policy layer — <span class="mono">PolicyCircuit</span></b>: a non-upgradeable rule engine on X Layer whose owner is fixed at deployment, while policy values such as limits, allowlists, and pause state remain owner-configurable. <span class="mono">CIRCUIT_ID</span>, a recomputable <span class="mono">commitment</span>, pause flag, per-action and daily limits, target + selector whitelists, authorised agents. <span class="mono">check()</span> is a pure view, so anyone can dry-run a proposal without spending gas.</li>
+        <li><b>Execution layer — <span class="mono">AgentContainer</span></b>: the keyless account owned by your TapeOut circuit container. It holds the funds, calls the circuit, records the spend and only then performs the call — <span class="mono">simulate()</span> is the free preview of exactly that path.</li>
+        <li><b>Daemon</b>: an always-on server (Cloudflare Worker, cron trigger or <span class="mono">POST /api/tick</span>). It evaluates the rules — drift rebalancing, price thresholds, intervals — asks the circuit, and submits approved actions as an authorised <b>relayer</b>. The relayer holds no funds and cannot withdraw or reconfigure anything, so nobody has to be around.</li>
+      </ul>
+      <h3 class="mt">Deployment on X Layer</h3>
+      <ul class="docs">
+        <li>Deploy <span class="mono">PolicyCircuit</span> and <span class="mono">AgentContainer</span> (owner = your TapeOut circuit container for both). Record the circuit ID and the container address.</li>
+        <li><b>One-time wiring, routed through your circuit container</b> (owner-only, the app does the routing): <span class="mono">AgentContainer.setPolicy(policy)</span>, <span class="mono">PolicyCircuit.setAgent(container, true)</span>, <span class="mono">PolicyCircuit.setLimits(...)</span>, <span class="mono">setTarget(router, true, false)</span> plus the swap selectors, and <span class="mono">AgentContainer.setRelayer(keeper, true)</span> — the Autonomy tab builds that last calldata for you.</li>
+        <li>Deploy the server and add its secrets: <span class="mono">ADMIN_PASSWORD</span>, <span class="mono">RELAYER_KEY</span> (the keeper), <span class="mono">RPC_URL</span>, optionally <span class="mono">DAEMON_SECRET</span> and <span class="mono">PRICE_URL</span>. Add a cron trigger every minute so the agent runs with nobody present.</li>
+        <li>Publish the page, then set <span class="mono">APP_ORIGINS</span> to the URL it is served from (comma-separated if several) and redeploy the server. The Worker refuses browser requests from any other origin instead of answering <span class="mono">Access-Control-Allow-Origin: *</span>; <span class="mono">/api/health</span> shows whether it is still locked.</li>
+        <li>Set a per-token cap with <span class="mono">PolicyCircuit.setTokenLimit(USDT, maxPerAction, dailyLimit)</span> as well as the native limits — a swap carries <span class="mono">value = 0</span>, so the native cap alone does not bound the USDT side.</li>
+        <li>Open <b>Autonomy</b>, unlock with the owner password, save the allocation (target weight, drift band, limits, router, USDT, wrapped OKB) and add the rules.</li>
+        <li>Publish the page to DeWEB and keep <span class="mono">?public=1</span> as the wallet-free status link for judges and users.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>3-minute demo script</h3>
+      <ul class="docs">
+        <li><b>0:00–0:20 Landing.</b> Open the page on <i>Start here</i>: one sentence says what it is (a robot that trades for you inside rules written on-chain) and one line says why it matters (you never hand over an unlimited key). Do not read the whole page aloud — point at the four steps and the "what it will never do" list.</li>
+        <li><b>0:20–0:45 Problem.</b> "Automated on-chain agents need a key, and a key means unlimited power. One leak and the treasury is gone — and you can never prove afterwards what the bot was allowed to do."</li>
+        <li><b>0:45–1:20 Policy circuit.</b> Open <i>Policy circuit</i>, show max per tx, 24h cap, whitelist, pause flag. Hit <i>Evaluate against circuit</i> — show the rule-by-rule verdict.</li>
+        <li><b>1:20–1:45 Container.</b> Open <i>Container</i>: the agent's wallet is a circuit-bound account, funded, and it is the address that executes. Show history.</li>
+        <li><b>1:45–2:20 Nobody at the keyboard.</b> Open <i>Autonomy</i>: the server daemon is <b>ONLINE</b>, target weight and drift band are set, the queue and the server decision log show cycles running with the tab closed. Show the kill switch and the queue-only mode.</li>
+        <li><b>2:20–2:40 It cannot be robbed.</b> The keeper is authorised but holds nothing; <i>Propose rogue action</i> is still rejected on chain with TARGET_NOT_ALLOWED inside the per-action and daily limits.</li>
+        <li><b>2:40–2:50 Revenue.</b> Activation fee + performance fee in basis points, both credited to the container the user controls.</li>
+        <li><b>2:50–3:00 TapeOut.</b> Circuit ID, processor address and keeper address are visible in the UI; everything shown is tryable from this page.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card mt">
+    <h3>How to try TapeGuardian right now</h3>
+    <div class="small dim">Without the server the page runs a faithful local mirror of the circuit (DEMO SIMULATION) so the full cycle is demonstrable with no funds. With the server deployed and its secrets set, <b>Autonomy</b> becomes the real thing: rules evaluated on a schedule, decisions logged, approved actions submitted by the keeper while your browser is closed, and a kill switch that can drop it back to queue-only in one click. Every decision is exportable as evidence JSON.</div>
+  </div>
+</section>
+
 </main>
-<script>
-const grid='#27272a', muted='#71717a';
-Chart.defaults.color=muted;Chart.defaults.font.family='Inter,system-ui,sans-serif';Chart.defaults.font.size=10;
-const tip={backgroundColor:'#09090b',borderColor:'#3f3f46',borderWidth:1,titleColor:'#71717a',bodyColor:'#f4f4f5',padding:10,displayColors:false};
-new Chart(document.getElementById('balanceChart'),{type:'line',data:{labels:['00:00','02:00','04:00','06:00','08:00','10:00','12:00','14:00','16:00','18:00','20:00','22:00','Now'],datasets:[{label:'Balance',data:[8420,8380,8520,8475,8680,8625,8790,8750,8910,8884,9032,8992,9084],borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,.14)',fill:true,tension:.38,pointRadius:0,pointHoverRadius:5,borderWidth:2.5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:tip},scales:{x:{grid:{color:grid},border:{display:false}},y:{grid:{color:grid},border:{display:false},ticks:{callback:v=>'$'+(v/1000).toFixed(1)+'k'},min:8000,max:9400}}}});
-new Chart(document.getElementById('actionsChart'),{type:'bar',data:{labels:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],datasets:[{label:'Allowed',data:[32,46,39,54,47,61,58],backgroundColor:'#22c55e',borderRadius:3},{label:'Rejected',data:[7,11,8,13,9,16,12],backgroundColor:'#ef4444',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:tip},scales:{x:{grid:{display:false},border:{display:false}},y:{grid:{color:grid},border:{display:false},beginAtZero:true}}}});
-new Chart(document.getElementById('latencyChart'),{type:'line',data:{labels:['00','04','08','12','16','20','24'],datasets:[{label:'Latency',data:[94,83,86,79,91,74,81],borderColor:'#a78bfa',tension:.35,pointRadius:0,pointHoverRadius:5,borderWidth:2.5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:tip},scales:{x:{grid:{color:grid},border:{display:false}},y:{grid:{color:grid},border:{display:false},min:50,max:110}}}});
-const decisions=[['Swap USDC → WETH','$420.00','0x7a...91c2 · Uniswap V3','Within daily cap','12 sec ago','allow'],['Transfer USDC','$1,800.00','0xd4...228f · Treasury','Target not whitelisted','2 min ago','reject'],['Swap WETH → USDC','$275.00','0x7a...91c2 · Uniswap V3','Within daily cap','6 min ago','allow'],['Bridge to X Layer','$640.00','0x91...c410 · Orbiter','Daily volume limit','11 min ago','reject'],['Add liquidity','$520.00','0x7a...91c2 · Uniswap V3','Within daily cap','18 min ago','allow']];
-function renderLog(){document.getElementById('log').innerHTML=decisions.map(d=>`<div class="row"><div class="decision-icon ${d[5]}">${d[5]==='allow'?'✓':'×'}</div><div><strong>${d[0]}</strong><small>${d[2]}</small></div><div class="amount"><strong>${d[1]}</strong><small>${d[3]}</small></div><div class="time"><span>${d[4]}</span><span class="badge ${d[5]} ">${d[5].toUpperCase()}</span></div></div>`).join('')};renderLog();
-function check(){const n=Number(document.getElementById('amount').value)||0,t=document.getElementById('target').value.trim(),ok=n<=500&&t.includes('7a'),v=document.getElementById('verdict'),txt=document.getElementById('verdictText'),reason=document.getElementById('reason'),p=document.getElementById('progress'),lim=document.getElementById('limitText');v.className='verdict '+(ok?'ok':'no');txt.textContent=ok?'ALLOW':'REJECT';reason.textContent=ok?'Target is allowlisted and within the daily volume cap.':n>500?'Exceeds the $500 per-action limit.':'Target address is not on the allowlist.';p.style.width=Math.min(100,Math.round(n/5))+'%';lim.textContent='$'+n.toLocaleString()+' / $500'}document.getElementById('simulate').onclick=check;document.getElementById('amount').oninput=check;document.getElementById('target').oninput=check;document.getElementById('pause').onclick=e=>{const paused=e.target.textContent.includes('Pause');e.target.textContent=paused?'Resume policy':'Pause policy';document.getElementById('policyStatus').textContent=paused?'PAUSED':'ACTIVE'};
-</script>
-</body></html>
+
+<footer>
+  <div><b style="color:var(--txt)">TapeGuardian</b> — an automated crypto agent whose limits are enforced on-chain, so a stolen key cannot drain the account.</div>
+  <div class="small" style="margin-top:6px">Policy circuit · keyless container · always-on daemon · built for X Layer testnet (chain 1952)</div>
+  <div class="small" style="margin-top:6px">Automated trading can lose money. Limits cap the loss, they do not remove it.</div>
+</footer>
+
+<script type="module" src="./modules/app.js"></script>
+<script src="./modules/dashboard-charts.js"></script>
+</body>
+</html>

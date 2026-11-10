@@ -2,5 +2,3 @@ foundry/.env
 foundry/out/
 foundry/cache/
 .wrangler/
-node_modules/
-dist/

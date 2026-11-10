@@ -249,3 +249,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .section-intro h2 { font-size: 23px; }
   .section-intro p { margin-top: 5px; }
 }
+
+/* Additive telemetry charts: the vanilla app and all existing tabs remain unchanged. */
+.chart-strip { margin-top: 16px; }
+.chart-card { min-height: 250px; }
+.chart-card .card-h { margin-bottom: 8px; }
+.chart-card .card-h h3 { text-transform: none; letter-spacing: .15px; color: var(--txt); }
+.chart-box { height: 190px; position: relative; }
+.chart-small-card { max-width: 50%; }
+@media(max-width: 850px) { .chart-small-card { max-width: none; } }
+@media(max-width: 600px) { .chart-box { height: 170px; } }

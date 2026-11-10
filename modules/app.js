@@ -1624,12 +1624,7 @@ function boot(){
   /* if the address carries #view, open it (so ?public=1 can deep-link) */
   /* header */
   $('#btn-wallet').onclick = connectWallet;
-  $('#btn-public').onclick = function(){
-    document.body.classList.toggle('public');
-    var on = document.body.classList.contains('public');
-    if(on){ try{ history.replaceState(null,'', location.pathname+'?public=1'); }catch(e){} toast('Public view on — share this link'); }
-    else { try{ history.replaceState(null,'', location.pathname); }catch(e){} }
-  };
+  /* public view removed */
   /* overview buttons */
   $('#btn-nudge').onclick = function(){ S.market.price = Math.max(20, S.market.price-0.30); advanceMarket(); tick(); renderMarket(); };
   $('#btn-demo-happy').onclick = function(){

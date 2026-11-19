@@ -60,6 +60,7 @@ contract AgentContainer {
     event Executed(uint256 indexed nonce, address indexed target, uint256 value, bytes4 selector, bytes result);
     event FeesWithdrawn(address indexed to, uint256 amount);
     event Withdrawn(address indexed to, uint256 amount);
+    event TokenWithdrawn(address indexed token, address indexed to, uint256 amount);
     event OwnerTransferStarted(address indexed from, address indexed to);
     event OwnerChanged(address indexed from, address indexed to);
 
@@ -258,7 +259,8 @@ contract AgentContainer {
 
     /// @notice Authorises (or removes) a relayer - the always-on daemon that keeps
     ///         the agent running while the owner is offline. A relayer can only push
-    ///         policy-approved executions: it cannot withdraw funds, change the
+    ///         policy-approved executions: it cannot withdraw funds (and, since policy
+    ///         v2, cannot point swap output at itself), change the
     ///         policy, pause/unpause, move the activation fee or add other relayers.
     ///         Revoking it stops the agent instantly and costs nothing.
     function setRelayer(address relayer, bool allowed) external onlyOwner {
@@ -310,6 +312,18 @@ contract AgentContainer {
         // CEI: emit before the external send for the same reentrancy reason above.
         emit Withdrawn(to, amount);
         _send(to, amount);
+    }
+
+    /// @notice Withdraws an ERC-20 the agent holds (e.g. the USDT side of the
+    ///         portfolio). Owner only, so it needs no policy budget and no active
+    ///         subscription: the owner can always get their own tokens out.
+    /// @dev    Low-level call so tokens that return nothing (USDT-style) also work.
+    function withdrawToken(address token, address to, uint256 amount) external onlyOwner nonReentrant {
+        if (token == address(0) || to == address(0)) revert ZeroAddress();
+        if (token.code.length == 0) revert NotAContract();
+        emit TokenWithdrawn(token, to, amount);
+        (bool ok, bytes memory ret) = token.call(abi.encodeWithSelector(0xa9059cbb, to, amount));
+        if (!ok || (ret.length != 0 && (ret.length < 32 || !abi.decode(ret, (bool))))) revert TransferFailed();
     }
 
     // ------------------------------------------------------------------ views

@@ -10,15 +10,11 @@
 
   var balanceCanvas = document.getElementById('balance-history-chart');
   var actionsCanvas = document.getElementById('decision-actions-chart');
-  var latencyCanvas = document.getElementById('decision-latency-chart');
   if (!balanceCanvas || !actionsCanvas) return;
 
-  // Stronger fallback data for demo video (clear story: mostly allowed, occasional rejects)
-  var fallbackBalance = [8420, 8510, 8480, 8620, 8750, 8680, 8890, 8820, 9010, 8950, 9120, 9084];
-  var fallbackLabels = ['00:00','02:00','04:00','06:00','08:00','10:00','12:00','14:00','16:00','18:00','20:00','Now'];
-  var fallbackAllowed = [28, 41, 35, 48, 39, 55, 52];
-  var fallbackRejected = [4, 7, 5, 9, 6, 11, 8];
-  var fallbackDays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  // Every number on these charts comes from the live Worker (/api/status, /api/log).
+  // Until there is real data the charts stay empty - nothing here is invented.
+  var DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
   var common = {
     responsive: true,
@@ -45,10 +41,10 @@
   var balanceChart = new ChartCtor(balanceCanvas, {
     type: 'line',
     data: {
-      labels: fallbackLabels,
+      labels: [],
       datasets: [{
         label: 'Container Balance',
-        data: fallbackBalance,
+        data: [],
         borderColor: '#22c55e',
         backgroundColor: 'rgba(34,197,94,.18)',
         fill: true,
@@ -71,10 +67,10 @@
   var actionsChart = new ChartCtor(actionsCanvas, {
     type: 'bar',
     data: {
-      labels: fallbackDays,
+      labels: DAYS,
       datasets: [
-        { label: 'Allowed', data: fallbackAllowed, backgroundColor: '#22c55e', borderRadius: 4, barPercentage: 0.7 },
-        { label: 'Rejected', data: fallbackRejected, backgroundColor: '#ef4444', borderRadius: 4, barPercentage: 0.7 }
+        { label: 'Allowed', data: [0, 0, 0, 0, 0, 0, 0], backgroundColor: '#22c55e', borderRadius: 4, barPercentage: 0.7 },
+        { label: 'Rejected', data: [0, 0, 0, 0, 0, 0, 0], backgroundColor: '#ef4444', borderRadius: 4, barPercentage: 0.7 }
       ]
     },
     options: Object.assign({}, common, {
@@ -84,27 +80,6 @@
       }
     })
   });
-
-  var latencyChart = latencyCanvas ? new ChartCtor(latencyCanvas, {
-    type: 'line',
-    data: {
-      labels: ['00','04','08','12','16','20','24'],
-      datasets: [{
-        label: 'Latency (ms)',
-        data: [92, 84, 88, 76, 89, 71, 81],
-        borderColor: '#a78bfa',
-        tension: 0.35,
-        pointRadius: 0,
-        borderWidth: 2
-      }]
-    },
-    options: Object.assign({}, common, {
-      scales: {
-        x: common.scales.x,
-        y: Object.assign({}, common.scales.y, { min: 50, max: 120 })
-      }
-    })
-  }) : null;
 
   function readHistory() {
     try { return JSON.parse(localStorage.getItem('tapeguard.chart.balance') || '[]'); } catch (e) { return []; }
@@ -139,7 +114,7 @@
 
       if (entries.length) {
         var buckets = Array.from({ length: 7 }, function (_, i) {
-          return { allowed: 0, rejected: 0, label: fallbackDays[i] };
+          return { allowed: 0, rejected: 0, label: DAYS[i] };
         });
         entries.forEach(function (entry) {
           var kind = String(entry.kind || '').toUpperCase();
@@ -157,7 +132,7 @@
         }
       }
     }).catch(function () {
-      // Keep fallback data visible when Worker is unreachable
+      // Worker unreachable: leave the charts as they are (empty or last real data).
     });
   }
 

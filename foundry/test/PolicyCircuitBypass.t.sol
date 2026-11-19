@@ -87,8 +87,18 @@ contract PolicyCircuitBypassTest is Test {
         assertFalse(ok); // router target still requires normal target/selector policy
         vm.prank(owner);
         policy.setTarget(router, true, true);
-        (ok,) = policy.check(agent, router, 0, hex"095ea7b3");
-        assertTrue(ok);
+        string memory reason;
+        // v2: on an authorised router, a function without a known recipient layout
+        // is refused even when the target allows any function.
+        (ok, reason) = policy.check(agent, router, 0, hex"095ea7b3");
+        assertFalse(ok);
+        assertEq(reason, "RECIPIENT_UNCHECKED");
+        // A standard V2 swap that pays the agent, with a minimum output, passes.
+        address[] memory path = new address[](2);
+        (ok, reason) = policy.check(
+            agent, router, 0, abi.encodeWithSelector(0x7ff36ab5, uint256(1), path, agent, block.timestamp)
+        );
+        assertTrue(ok, reason);
     }
 
     function testUtcDayBoundaryResetsActionCounter() public {

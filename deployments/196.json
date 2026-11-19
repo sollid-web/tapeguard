@@ -1,0 +1,14 @@
+{
+  "chainId": 196,
+  "network": "X Layer mainnet",
+  "AgentContainer": "0x23a28fcdfa235116e39c38d32b2e597676d03240",
+  "PolicyCircuit": "0xe58db7730be0a5b8422e94f920d4851d3d8d6161",
+  "tapeout": {
+    "factory": "0x1f09daefa827f02cbb40967cc91b259763760761",
+    "opener": "0x536add8f30f03b69f6fbf29d425a816a0dc50106",
+    "circuits": null,
+    "circuitId": null,
+    "container": null
+  },
+  "note": "Addresses above are the v1 contracts the live Worker reports. Replace them with the output of script/LaunchTapeGuard.s.sol after the v2 launch, then run: node scripts/sync-config.mjs"
+}

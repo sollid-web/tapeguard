@@ -1,0 +1,14 @@
+{
+  "name": "tapeguard-signer",
+  "version": "1.0.0",
+  "description": "Restricted relayer signer Worker for TapeGuard",
+  "scripts": {
+    "test": "node --test src/*.test.js",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "viem": "^2.58.0"
+  },
+  "private": true,
+  "type": "module"
+}

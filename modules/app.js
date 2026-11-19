@@ -245,17 +245,29 @@ function advanceMarket(){
   m.history.push(Number(m.price.toFixed(3)));
   if(m.history.length > 120) m.history.shift();
   m.blockHeight += 1;
-  if(Math.random() < 0.25) m.tasksMinted += Math.floor(Math.random()*4);
-  if(Math.random() < 0.15) m.activeMiners = Math.max(10, m.activeMiners + (Math.random()<0.5?-1:1));
+}
+/* Live mode: the ticker shows the Worker's real OKB price, never the simulation. */
+function syncLiveMarket(status){
+  if(!LIVE || !status || !status.prices) return;
+  var okb = Number(status.prices.okb);
+  if(!Number.isFinite(okb) || okb <= 0) return;
+  var m = S.market;
+  if(m.live !== true){ m.history = []; m.live = true; }
+  m.price = okb;
+  m.history.push(Number(okb.toFixed(3)));
+  if(m.history.length > 120) m.history.shift();
+  renderMarket();
 }
 function renderMarket(){
   var c = $('#ov-price'); if(!c) return;
   var p = S.market.price, thr = triggerThreshold(S.triggers);
-  c.textContent = 'OKB/USD '+p.toFixed(2);
+  c.textContent = (LIVE && !S.market.live) ? 'OKB/USD --' : 'OKB/USD '+p.toFixed(2);
   c.className = 'chip ' + (p<=thr ? 'ok' : '');
   var m = $('#ov-market');
   if(m){
-    m.textContent = 'blocks '+S.market.blockHeight+' · TapeOut tasks '+S.market.tasksMinted+' · active miners '+S.market.activeMiners+
+    m.textContent = (LIVE
+        ? (S.market.live ? 'live OKB price from the Worker' : 'waiting for the Worker price feed')
+        : 'demo simulation (no contracts configured)') +
       ' · nearest trigger at '+thr.toFixed(2)+(S.daemon.running?' · daemon live':' · daemon stopped');
   }
   drawChart();
@@ -549,7 +561,7 @@ function tick(){
         why = 'OKB/USD '+p.toFixed(2)+' '+g.op+' '+Number(g.threshold).toFixed(2); }
       else if(g.type==='time'){ fired = now()-(g.lastFired||0) >= (g.intervalMs||60000); why = 'interval '+Math.round((g.intervalMs||60000)/1000)+'s'; }
       else if(g.type==='block'){ fired = m.blockHeight-(g.lastBlock||0) >= (g.blocks||10); why = 'block '+m.blockHeight+' (+'+g.blocks+')'; }
-      else if(g.type==='event'){ fired = Math.random() < (g.p||0.05); why = 'TapeOut task batch minted (tasks '+m.tasksMinted+')'; }
+      else if(g.type==='event'){ fired = Math.random() < (g.p||0.05); why = 'simulated event (demo mode)'; }
       if(fired){ g.lastFired = now(); g.lastBlock = m.blockHeight; fireTrigger(g, why); }
     });
     persist();
@@ -776,6 +788,7 @@ function loadServer(){
       loaded:true, ok: !!status, error: status ? '' : ((res[0] && res[0].__error) || 'unreachable'),
       status: status, rules: (res[1] && res[1].rules) || [], queue: (res[2] && res[2].queue) || []
     };
+    syncLiveMarket(status);
     renderAutonomy();
   });
 }
@@ -1850,7 +1863,8 @@ function boot(){
     log('CONFIG','Agent initialised', (LIVE?'live contracts detected':'demo simulation')+' · circuit '+S.agent.circuitId);
     log('FUND','Container ready','balance '+fmtUnits(S.balance.OKB,4)+' '+CHAIN.sym+' · keyless execution through the policy circuit');
   }
-  if(!S.market.history.length){ for(var i=0;i<40;i++) advanceMarket(); }
+  if(!LIVE && !S.market.history.length){ for(var i=0;i<40;i++) advanceMarket(); }
+  if(LIVE){ S.market.live = false; S.market.history = []; }
   renderOverview(); renderFeed(); renderDaemon(); renderContainer(); renderRevenue(); renderPolicy(); renderContracts();
   initAutonomy(); renderAutonomy();
   if(API) loadServer();

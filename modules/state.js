@@ -47,13 +47,13 @@ function defaultState(){
     daemon: { running:false, startedAt:0, ticks:0, lastTick:0, resumes:0 },
     triggers: [
       { id:'tg1', type:'price', name:'DCA guard', enabled:true, op:'<=', threshold:42.0, cooldownMs:30000, lastFired:0,
-        action:{ label:'Buy BEM on dip', target:DEMO.router, targetLabel:'X Layer DEX router', selector:SEL.swapETH, value:parseUnits('0.30').toString(), memo:'DCA buy via daemon', receiveUsdt:parseUnits('13.2').toString() } },
-      { id:'tg2', type:'event', name:'TapeOut task reward', enabled:true, p:0.08, cooldownMs:45000, lastFired:0,
+        action:{ label:'Buy USDT on dip', target:DEMO.router, targetLabel:'X Layer DEX router', selector:SEL.swapETH, value:parseUnits('0.30').toString(), memo:'DCA buy via daemon', receiveUsdt:parseUnits('13.2').toString() } },
+      { id:'tg2', type:'event', name:'Reward sweep (demo)', enabled:true, p:0.08, cooldownMs:45000, lastFired:0,
         action:{ label:'Sweep reward to treasury', target:DEMO.treasury, targetLabel:'Treasury (cold)', selector:SEL.transfer, value:parseUnits('0.10').toString(), memo:'reward sweep' } },
       { id:'tg3', type:'block', name:'Block heartbeat', enabled:true, blocks:15, cooldownMs:25000, lastFired:0, lastBlock:0,
         action:{ label:'Micro DCA', target:DEMO.router, targetLabel:'X Layer DEX router', selector:SEL.swapETH, value:parseUnits('0.05').toString(), memo:'heartbeat buy', receiveUsdt:parseUnits('2.2').toString() } }
     ],
-    market: { price: 44.2, threshold: 42.0, history: [], tasksMinted: 1284, activeMiners: 46, blockHeight: 41802300 },
+    market: { price: 44.2, threshold: 42.0, history: [], blockHeight: 41802300 },
     fees: { activation: parseUnits('5').toString(), bps: 20, ledger: [], paid: false },
     pending: [],
     filters: 'all'

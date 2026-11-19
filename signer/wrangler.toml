@@ -1,0 +1,15 @@
+# TapeGuard relayer signer. Deploy from this folder:
+#   npx wrangler secret put RELAYER_PRIVATE_KEY   (the relayer key, 0x + 64 hex)
+#   npx wrangler secret put SIGNER_TOKEN          (long random string, also set on the main Worker)
+#   npx wrangler deploy
+name = "tapeguard-signer"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+CHAIN_ID = "196"
+# The AgentContainer this signer may call. Update after redeploying the contracts.
+CONTAINER = "0x23a28fcdfa235116e39c38d32b2e597676d03240"
+MAX_GAS = "2000000"
+MAX_FEE_WEI = "5000000000"

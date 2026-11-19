@@ -1,112 +1,103 @@
-# TapeGuardian — autonomous agentic wallet on X Layer
+# TapeGuard — autonomous agent wallet guarded by a TapeOut circuit on X Layer
 
-## 🔴 Live demo
+TapeGuard lets a trading agent run your X Layer portfolio 24/7 without ever holding your key.
+Every action the agent takes is judged on-chain twice, in the same transaction: by a Solidity
+safety floor, and by a **guard circuit taped out on TapeOut** whose `eval()` gives the final verdict.
 
-**Dashboard → https://tapeguard.tapeguard.workers.dev**
+**Dashboard → https://tapeguard.tapeguard.workers.dev** · status: [`/api/status`](https://tapeguard.tapeguard.workers.dev/api/status) · evidence: [`/api/evidence`](https://tapeguard.tapeguard.workers.dev/api/evidence)
 
-| | |
+| | X Layer mainnet (chain 196) |
 |---|---|
-| **Network** | X Layer testnet (chain ID 1952) |
-| **AgentContainer** | [`0x6d2A851f62F1C82DA7f60E679de1927dB8Eb93dB`](https://www.okx.com/web3/explorer/xlayer-test/address/0x6d2A851f62F1C82DA7f60E679de1927dB8Eb93dB) |
-| **Evidence endpoint** | [`GET /api/evidence`](https://tapeguard.tapeguard.workers.dev/api/evidence) — full JSON bundle |
-| **Status endpoint** | [`GET /api/status`](https://tapeguard.tapeguard.workers.dev/api/status) — live daemon state |
+| AgentContainer | see [`deployments/196.json`](deployments/196.json) |
+| PolicyCircuit | see [`deployments/196.json`](deployments/196.json) |
+| TapeOut processor (circuits) + guard circuit id | see [`deployments/196.json`](deployments/196.json) → `tapeout` (filled in by the v2 launch, [`LAUNCH.md`](LAUNCH.md)) |
+| TapeOut factory / opener | `0x1f09DAeFA827f02CBb40967cc91b259763760761` / `0x536adD8F30f03b69f6fbF29d425A816A0dC50106` |
 
 ---
 
-## 🎯 The problem it solves
+## The problem
 
-Automated crypto trading requires a bot that can act without you watching. The only way to give a bot that power today is to hand it your **private key** — which is unlimited, permanent access to everything in your wallet. One server compromise, one leaked environment variable, one rogue dependency, and the entire treasury is gone. There is also no on-chain record of what the bot was *authorised* to do versus what it *chose* to do, so you cannot prove — after the fact — that it was behaving correctly.
+To let a bot trade for you today you hand it a private key: unlimited, permanent power over
+everything in the wallet. One leaked server variable and the treasury is gone, and afterwards nobody
+can prove what the bot was *allowed* to do.
 
-TapeGuardian solves both problems:
+## How TapeGuard solves it
 
-1. **The bot never holds a key.** The assets sit in a keyless smart-contract account (`AgentContainer`). The only way money leaves is through a transaction the on-chain rule engine (`PolicyCircuit`) approves inside the same atomic call.
-2. **The rules are on-chain and verifiable.** Every trade limit, every allowed exchange address, every daily cap is recorded on X Layer. Anyone — judges, auditors, users — can query the circuit and see exactly what the agent is and is not permitted to do.
+```
+ keeper (Worker)                X Layer mainnet
+ ───────────────               ─────────────────────────────────────────────────────────
+ decide trade  ──sign──▶  AgentContainer.execute(target, value, data)
+ (no key)       signer          │
+                Worker          ├─▶ PolicyCircuit.check()   ── Solidity safety floor
+                (key,           │        │                     (allowlists, caps, recipient = self,
+                 execute()      │        │                      min-out > 0, nonce, pause)
+                 only)          │        └─▶ TapeOut circuits.eval(guardId, factBits)
+                                │                 17-NAND guard circuit = final verdict
+                                ├─▶ PolicyCircuit.recordExecution()   (caps re-checked)
+                                └─▶ DEX router (output paid to the container itself)
+```
 
----
+1. **The agent never holds your key.** Funds sit in a keyless `AgentContainer`. The keeper's key
+   lives in a separate signer Worker ([`signer/`](signer/)) that will only sign
+   `AgentContainer.execute(...)` on chain 196 — nothing else, not even a plain transfer.
+2. **The rules are on-chain.** `PolicyCircuit` enforces the safety floor: per-action and daily caps
+   (native and per token), target/function allowlists, a pause switch, and — new in v2 — every DEX
+   swap must pay its output **to the container** with a **non-zero minimum output**.
+3. **The verdict is a TapeOut circuit.** Each action is reduced to 10 fact bits; the taped-out guard
+   circuit computes the approval. It also carries a rule that exists *only* in the circuit: once half
+   of the day's budget is spent, large trades are refused (small steps only).
 
-## 👤 Who the users are
+### The TapeOut guard circuit
 
-| User | Pain point | What TapeGuardian gives them |
+| bit | fact | bit | fact |
+|---|---|---|---|
+| 0 | not paused | 5 | within per-action cap |
+| 1 | agent authorised | 6 | within daily cap |
+| 2 | target allowed | 7 | within daily action count |
+| 3 | function allowed | 8 | large action (> ½ per-action cap) |
+| 4 | recipient safe (swap pays the agent, min-out > 0) | 9 | half of today's budget used |
+
+`APPROVE = bits0..7 all set AND NOT(bit8 AND bit9)` — 17 NAND gates, compiled by
+[`tapeout/guard-circuit.mjs`](tapeout/guard-circuit.mjs) into TapeOut's netlist format and verified on
+all 1,024 inputs (JS simulator, Solidity evaluator, and — after the launch — the live circuit through
+[`foundry/test/TapeOutFork.t.sol`](foundry/test/TapeOutFork.t.sol)).
+
+**Fail-closed by design.** TapeOut's contracts are upgradeable and unaudited, so the floor is checked
+first and the circuit can only *add* refusals: an outage returns `CIRCUIT_UNAVAILABLE`, a hostile
+upgrade that approves everything still cannot pass an action the floor rejected (both tested). The
+owner can unlink the circuit as an escape hatch; the link is part of the on-chain policy commitment.
+
+**Owned by a TapeOut container.** Both contracts support two-step ownership handover, and the launch
+script can open the guard circuit's own TapeOut container (its ERC-6551 account) and hand ownership
+to it — so whoever holds the circuit NFT controls the agent.
+
+## Who it is for
+
+| User | Pain | What TapeGuard gives them |
 |---|---|---|
-| **DeFi-active retail traders** | Want to rebalance a portfolio automatically but won't hand over a full private key | A trading agent that physically cannot exceed the limits they set |
-| **Small funds / DAOs** | Need an autonomous keeper but require on-chain proof of authorisation for accounting and governance | Immutable on-chain policy + an audit log every trade is written to |
-| **Developers building on X Layer** | Want a reference implementation of a keyless agentic account with composable policy enforcement | Fully open-source contracts, a live Cloudflare Worker daemon, and 16 Foundry regression tests |
+| OKB/USDT holders on X Layer | want a target allocation kept without watching charts or sharing a key | an agent that physically cannot exceed the limits they set |
+| Small funds / DAOs | need an autonomous keeper with provable authorisation | on-chain policy + commitment hash + a TapeOut circuit anyone can `eval()` |
+| X Layer builders | need a safe execution layer for their own agents | reusable guard circuits on TapeOut (`REF`-able by other circuits) |
 
-The entry-level user persona is someone who already holds OKB and USDT on X Layer and wants to keep a target weight (e.g., 60 % OKB / 40 % USDT) without watching the chart.
-
----
-
-## ⚙️ How it uses the PolicyCircuit + AgentContainer on X Layer
-
-TapeGuardian deploys two contracts on X Layer and wires them together so that **no trade can happen unless both contracts agree, in the same transaction**:
-
-```
-PolicyCircuit  ←  AgentContainer.execute()  →  DEX router
-     ↑                     ↑
-  check()             called by keeper
-  (view, free)        (relayer key, low-value)
-```
-
-**PolicyCircuit** is the rule engine. The owner configures it once:
-- `setLimits(maxPerAction, dailyCapWei)` — hard ceilings on every trade and on 24-hour volume
-- `setTarget(router, true, false)` — whitelist the exact DEX router address
-- `setFunction(router, selector, true)` — whitelist only the swap selectors, not arbitrary calls
-- `setPaused(true)` — circuit-breaker: stops all trading on-chain even if the server is fully compromised
-
-Its `check()` function is a **pure view call** (zero gas, callable by anyone), so the daemon and the dashboard can dry-run any proposed trade before spending gas.
-
-**AgentContainer** is the keyless account that holds the funds. It calls `PolicyCircuit.check()` **inside** `execute()` before making any external call, so the rule check and the trade succeed or fail together — they cannot be separated. ERC-20 outflows (`approve`, `transfer`, `transferFrom`) are also checked against per-token limits, closing the vector where a `value = 0` swap calldata could move tokens without touching the native budget.
-
-The daemon (Cloudflare Worker, cron-driven) is the keeper:
-1. Reads balances and prices every minute
-2. Calls `AgentContainer.simulate()` (which runs the same checks as `execute()`) as a free dry-run
-3. If approved, asks the external signer service to sign the transaction — the private key never enters the Worker
-4. Broadcasts the signed transaction; the on-chain contracts enforce the limits at settlement
-
-The result is a trading agent where **the limits are not configuration — they are code on X Layer that cannot be bypassed by the server**.
-
----
-
-## Canonical contract evidence
-
-The Foundry deployment workspace is vendored at [`foundry/`](foundry/). It contains the exact
-contracts, regression tests, deployment script, pinned forge-std metadata, and CI workflow used for
-contract verification. Generated build output and secrets are intentionally excluded; use
-`foundry/.env.example` to create local deployment configuration.
-
-From the project root, reproduce the contract checks with:
+## Verify it yourself
 
 ```sh
-cd foundry
-forge fmt --check
-forge build
-forge test -vvv
+npm test                                   # Worker + guard circuit (27 tests)
+(cd signer && npm ci && npm test)          # signer refuses anything but execute() (7 tests)
+cd foundry && forge fmt --check && forge test   # contracts (36 tests)
+# after the launch, against the real TapeOut circuit on mainnet:
+TAPEOUT_CIRCUITS=0x... TAPEOUT_CIRCUIT_ID=n forge test --match-contract TapeOutForkTest --fork-url https://rpc.xlayer.tech -vv
 ```
 
-The copied workspace currently passes 16 Foundry tests. The configured X Layer testnet RPC reports
-chain ID 1952 (`0x7a0`). X Layer mainnet uses chain ID 196. The Foundry sample targets testnet;
-the Worker and dashboard fallback chain ID is 196, so explicitly configure 1952 when testing against
-testnet. Contract redeployment is authorized but has not completed in this environment
-because the deployment command requires explicit production-deploy permission. Existing deployed
-addresses must not be treated as addresses for the newly verified bytecode until deployment receipts
-and on-chain bytecode checks are recorded here.
-
-The sibling workspace at `../tapeguardian-foundry` is the deployment/archive mirror for the Foundry
-contract artifacts and receipts. Treat `foundry/` as the active source-of-truth workspace for the
-checked-in code, and the external mirror only as a historical or deployment record when a receipt is
-being verified.
-
-The frontend ABI artifacts in [`abi/`](abi/) are generated from the copied Foundry build and embedded
-in `index.html`. They are source artifacts only until the corresponding contracts are redeployed and
-verified on chain.
+How to launch v2 on mainnet: **[`LAUNCH.md`](LAUNCH.md)**.
 
 ## In plain words (what it is, and why you would want it)
 
-TapeGuardian is an **autonomous agent** — a program that trades for you without you watching. The
+TapeGuard is an **autonomous agent** — a program that trades for you without you watching. The
 usual way to build one is to hand a bot your private key. That key is unlimited power: one leak drains
 the wallet, and afterwards there is no way to prove what the bot was allowed to do.
 
-TapeGuardian replaces that trust with rules enforced on the blockchain. You write the rules once — how
+TapeGuard replaces that trust with rules enforced on the blockchain. You write the rules once — how
 much may move per trade, how much per day, which exchange address is allowed, how far your balance may
 drift from your target. The agent's account holds your funds but has no private key: the only way money
 leaves is a call the rulebook approves, in the same transaction as the trade. The agent runs on a
@@ -126,7 +117,7 @@ To trade automatically, a bot normally needs access to your private key. That ke
 
 🛡️ Our Solution
 
-TapeGuardian separates transaction signing from the Worker and enforces execution rules in the
+TapeGuard separates transaction signing from the Worker and enforces execution rules in the
 Policy Circuit on chain. The contract owner is fixed at deployment, but policy settings remain
 owner-configurable and are not immutable.
 The background Worker requests signatures from a separate signer service and broadcasts approved
@@ -151,13 +142,13 @@ AgentContainer has no private key, but it does hold the assets being managed.
                                                     │ Executes
                                                     ▼
                                            [Whitelisted DEX Swap]
-1. Policy Layer (PolicyCircuit): A non-upgradeable smart-contract rule engine deployed on X Layer. Its owner is fixed at deployment, but policy data such as limits, allowlists, and pause state remain owner-configurable. It dictates the maximum allowed size per transaction, a rolling 24-hour volume cap, whitelist expiration, and authorized target/selector addresses (e.g., specific DEX routers). It features a pure check() view function allowing cost-free transaction dry-runs.
+1. Policy Layer (PolicyCircuit): A non-upgradeable smart-contract rule engine deployed on X Layer. Ownership moves only by a two-step handover (e.g. to a TapeOut container); policy data such as limits, allowlists, and pause state remain owner-configurable. It dictates the maximum allowed size per transaction, a rolling 24-hour volume cap, whitelist expiration, and authorized target/selector addresses (e.g., specific DEX routers). It features a pure check() view function allowing cost-free transaction dry-runs.
 2. Execution Layer (AgentContainer): A keyless smart contract account that holds your assets. It contains no private key. It handles requests by calling the Policy Circuit inside the transaction window, ensuring the rule check and the trade succeed or fail together.
 3. The Autonomous Daemon: An always-on Cloudflare Worker triggered by a minute-by-minute cron job. It monitors market conditions (e.g., OKB/USD price drift), checks proposed calls against the policy, asks the external signer to sign the transaction, and broadcasts it.
 
 🛠️ X Layer Integration & Tech Stack
 
-• Blockchain Network: X Layer mainnet is chain ID 196; X Layer testnet is chain ID 1952 (`0x7a0`). The Foundry sample targets testnet. The Worker and dashboard fallback is mainnet, so set the chain ID explicitly when using testnet; no deployment is implied by these configuration values.
+• Blockchain Network: X Layer mainnet, chain ID 196. TapeOut has no testnet, so the contracts, the guard circuit and the Worker all run on mainnet (rehearse on an anvil fork first, see LAUNCH.md).
 • Smart Contracts: Formulated in Solidity using robust, security-first access control boundaries to prevent unauthorized parameter overrides.
 • Off-Chain Automation: Built using Cloudflare Workers for high-availability, low-latency background cron execution and edge-routed state management.
 • Front-End & Tools: A highly responsive dashboard featuring a comprehensive Policy Simulator, live activity/decision logs, single-click JSON evidence exporting, and an integrated deployment control plane featuring an on-chain kill switch.
@@ -205,6 +196,11 @@ authorised relayer**. The daemon is that relayer:
   and daily limits.
 - It **cannot** withdraw, change the policy, unpause the agent, move the activation fee, or authorise
   another relayer. Those are all `onlyOwner`.
+- Since policy v2 it also **cannot redirect swap output**: every router swap must name the container
+  as recipient and carry a non-zero minimum output (`RECIPIENT_NOT_AGENT`, `NO_MIN_OUT`). v1 allowed a
+  leaked keeper to swap the daily budget to itself; the regression test is
+  `testKeeperCannotRedirectSwapOutput`.
+- The signer Worker refuses to sign anything except `AgentContainer.execute(...)` on chain 196.
 - The relayer has no owner privileges, but a compromised signer can still execute actions allowed by
   the on-chain policy. Revocation remains owner-controlled through `setRelayer(x,false)`.
 
@@ -353,8 +349,8 @@ session or `DAEMON_SECRET` (there is no "unprotected" mode).
   before the tab was opened — proof it ran without you.
 - **2:20–2:45 Rebalance.** Show current weight outside the band, the built swap, the circuit check, the
   execution hash on the explorer.
-- **2:45–3:00 TapeOut.** Circuit ID + processor address visible; keeper cannot withdraw; fees flow to
-  the container you control.
+- **2:45–3:00 TapeOut.** Processor address + guard circuit id; call `eval()` on the live circuit with a
+  "large trade, budget half spent" fact vector and watch it refuse what the Solidity floor allowed.
 
 ## Safety properties
 

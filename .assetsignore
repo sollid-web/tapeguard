@@ -1,0 +1,24 @@
+# Wrangler publishes the [assets] directory (".") as public files. Only the dashboard
+# (index.html, modules/, styles/, abi/, deployments/) should be reachable - never
+# source, keys, or tooling. Uses .gitignore syntax.
+.git
+.github
+.wrangler
+node_modules
+.env
+.env.*
+**/.env
+**/.env.*
+foundry
+server
+signer
+scripts
+tapeout
+*.md
+*.sql
+*.toml
+package.json
+package-lock.json
+.gitignore
+.assetsignore
+demo-recorder.js

@@ -1,4 +1,4 @@
-name: Worker
+name: Worker, signer and circuit
 
 on:
   push:
@@ -12,5 +12,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-      - run: npm test
+      - name: Worker + guard circuit
+        run: npm test
+      - name: Signer Worker
+        working-directory: signer
+        run: npm ci && npm test

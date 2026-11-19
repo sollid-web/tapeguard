@@ -5,6 +5,7 @@ import "forge-std/Script.sol";
 import "../contracts/PolicyCircuit.sol";
 import "../contracts/AgentContainer.sol";
 import "../contracts/GuardNetlist.sol";
+import "../contracts/TapeGuardFactory.sol";
 
 interface ITapeOutFactory {
     function createCPU(string calldata, string calldata, string calldata, uint256, uint256)
@@ -61,18 +62,46 @@ contract LaunchTapeGuard is Script {
     uint256 constant NAND = 0;
     uint256 constant EXEC_FEE_CAP = 0.002 ether; // execute refunds the excess over EXEC_FEE
 
+    // Launch state, shared by the steps below (keeps every step small).
+    address deployer;
+    address relayer;
+    address circuits;
+    uint256 circuitId;
+    address treasury;
+    uint16 feeBps;
+    address router;
+    address usdt;
+    PolicyCircuit policy;
+    AgentContainer agent;
+    address factory;
+    address container;
+
     function run() external {
         require(block.chainid == 196, "X Layer mainnet (or a fork of it) only");
         uint256 pk = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(pk);
-        address relayer = vm.envAddress("RELAYER_ADDRESS");
+        deployer = vm.addr(pk);
+        relayer = vm.envAddress("RELAYER_ADDRESS");
+        // TREASURY set: hosted terms (activation + PROTOCOL_FEE_BPS go to the treasury).
+        treasury = vm.envOr("TREASURY", address(0));
+        feeBps = treasury == address(0) ? 0 : uint16(vm.envOr("PROTOCOL_FEE_BPS", uint256(10)));
+        router = vm.envOr("ROUTER", address(0));
+        usdt = vm.envOr("USDT", address(0));
 
         vm.startBroadcast(pk);
+        (circuits, circuitId) = _guardCircuit(deployer);
+        _deployAndWire();
+        _activateAndFund();
+        if (vm.envOr("DEPLOY_FACTORY", false)) _deployFactory();
+        if (vm.envOr("HANDOVER_TO_TAPEOUT_CONTAINER", false)) {
+            container = _handover(circuits, circuitId, policy, agent);
+        }
+        vm.stopBroadcast();
+        _report();
+    }
 
-        (address circuits, uint256 circuitId) = _guardCircuit(deployer);
-
-        PolicyCircuit policy = new PolicyCircuit(deployer);
-        AgentContainer agent = new AgentContainer(deployer);
+    function _deployAndWire() internal {
+        policy = new PolicyCircuit(deployer);
+        agent = new AgentContainer(deployer, treasury, feeBps);
         agent.setPolicy(address(policy));
         agent.setRelayer(relayer, true);
         policy.setAgent(address(agent), true);
@@ -80,15 +109,12 @@ contract LaunchTapeGuard is Script {
             vm.envOr("MAX_PER_ACTION_WEI", uint256(0.05 ether)), vm.envOr("DAILY_LIMIT_WEI", uint256(0.25 ether))
         );
         policy.setMaxActionsPerDay(vm.envOr("MAX_ACTIONS_PER_DAY", uint256(6)));
-
-        address router = vm.envOr("ROUTER", address(0));
         if (router != address(0)) {
             policy.setTarget(router, true, false);
             policy.setRouter(router, true);
             policy.setFunction(router, 0x7ff36ab5, true); // swapExactETHForTokens
             policy.setFunction(router, 0x18cbafe5, true); // swapExactTokensForETH
         }
-        address usdt = vm.envOr("USDT", address(0));
         if (usdt != address(0)) {
             policy.setTarget(usdt, true, false);
             policy.setFunction(usdt, 0x095ea7b3, true); // approve (spender must be a registered router)
@@ -96,28 +122,39 @@ contract LaunchTapeGuard is Script {
                 usdt, true, vm.envOr("USDT_MAX_PER_ACTION", uint256(25e6)), vm.envOr("USDT_DAILY_LIMIT", uint256(100e6))
             );
         }
-
         policy.setTapeOutCircuit(circuits, circuitId);
+    }
 
+    function _activateAndFund() internal {
         if (vm.envOr("ACTIVATE", false)) agent.activate{value: agent.activationFee()}();
         uint256 fund = vm.envOr("FUND_WEI", uint256(0));
         if (fund > 0) {
             (bool ok,) = address(agent).call{value: fund}("");
             require(ok, "fund");
         }
+    }
 
-        address container = address(0);
-        if (vm.envOr("HANDOVER_TO_TAPEOUT_CONTAINER", false)) {
-            container = _handover(circuits, circuitId, policy, agent);
-        }
+    /// One-click agents for everyone else, on the same circuit, venue and terms.
+    function _deployFactory() internal {
+        require(
+            treasury != address(0) && router != address(0) && usdt != address(0), "factory needs TREASURY, ROUTER, USDT"
+        );
+        factory = address(
+            new TapeGuardFactory(
+                treasury, feeBps, circuits, circuitId, router, usdt, relayer, new PolicyCircuitDeployer()
+            )
+        );
+    }
 
-        vm.stopBroadcast();
-
+    function _report() internal view {
         console.log("TapeOut circuits (processor):", circuits);
         console.log("Guard circuit id:", circuitId);
         console.log("PolicyCircuit:", address(policy));
         console.log("AgentContainer:", address(agent));
         console.log("Owner:", container == address(0) ? deployer : container);
+        console.log("Treasury (0 = self-hosted):", treasury);
+        console.log("Protocol fee bps:", feeBps);
+        if (factory != address(0)) console.log("TapeGuardFactory:", factory);
         console.log("Policy commitment:");
         console.logBytes32(policy.commitment());
     }

@@ -127,6 +127,10 @@ contract LaunchScriptTest is Test {
         vm.setEnv("RELAYER_ADDRESS", vm.toString(address(0x7E1A)));
         vm.setEnv("ACTIVATE", "true");
         vm.setEnv("FUND_WEI", "200000000000000000");
+        vm.setEnv("TREASURY", vm.toString(address(0x7EA5)));
+        vm.setEnv("ROUTER", vm.toString(address(0x2007E2)));
+        vm.setEnv("USDT", vm.toString(address(0x05D7)));
+        vm.setEnv("DEPLOY_FACTORY", "true");
     }
 
     function testFullLaunchWithHandover() public {
@@ -146,6 +150,10 @@ contract LaunchScriptTest is Test {
         assertEq(agent.policy(), address(policy));
         assertTrue(agent.relayers(address(0x7E1A)));
         assertTrue(policy.authorisedAgents(address(agent)));
+        assertEq(agent.treasury(), address(0x7EA5));
+        assertEq(agent.protocolFeeBps(), 10);
+        assertEq(address(0x7EA5).balance, 0.02 ether); // activation went to the treasury
+        assertTrue(policy.authorizedRouters(address(0x2007E2)));
 
         address container = OpenerStub(OPENER).accountOf(circuits, id);
         assertTrue(container != address(0));

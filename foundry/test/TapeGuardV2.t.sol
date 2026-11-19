@@ -55,7 +55,7 @@ contract TapeGuardV2Test is Test {
     bytes4 constant SWAP = MockV2Router.swapExactETHForTokens.selector;
 
     function setUp() public {
-        agent = new AgentContainer(owner);
+        agent = new AgentContainer(owner, address(0), 0);
         policy = new PolicyCircuit(owner);
         router = new MockV2Router();
         tapeout = new TapeOutCircuitsMock();

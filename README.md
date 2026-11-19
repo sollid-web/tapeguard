@@ -71,6 +71,18 @@ owner can unlink the circuit as an escape hatch; the link is part of the on-chai
 script can open the guard circuit's own TapeOut container (its ERC-6551 account) and hand ownership
 to it — so whoever holds the circuit NFT controls the agent.
 
+## Business model (on-chain)
+
+`TapeGuardFactory` creates a guarded agent in one transaction (policy + container, wired to the
+guard circuit, Uniswap V2 and the keeper, activated, funded, handed to the user). Its agents carry
+terms fixed at deployment:
+
+- **subscription:** 0.02 OKB per 30 days, paid to the TapeGuard treasury by `activate()`;
+- **volume fee:** 0.10% of executed OKB volume (`ProtocolFeePaid`), hard-capped at 0.50% in the
+  contract, so a leaked keeper cannot drain the agent through fees.
+
+Self-hosted agents (`treasury = 0`) pay no protocol fee.
+
 ## Who it is for
 
 | User | Pain | What TapeGuard gives them |
@@ -82,14 +94,17 @@ to it — so whoever holds the circuit NFT controls the agent.
 ## Verify it yourself
 
 ```sh
-npm test                                   # Worker + guard circuit (27 tests)
+npm test                                   # Worker + guard circuit + frontend encoder (28 tests)
 (cd signer && npm ci && npm test)          # signer refuses anything but execute() (7 tests)
-cd foundry && forge fmt --check && forge test   # contracts (36 tests)
+cd foundry && forge fmt --check && forge test   # contracts (48 tests)
 # after the launch, against the real TapeOut circuit on mainnet:
 TAPEOUT_CIRCUITS=0x... TAPEOUT_CIRCUIT_ID=n forge test --match-contract TapeOutForkTest --fork-url https://rpc.xlayer.tech -vv
+# the trading venue on real liquidity (full OKB -> USDT -> OKB round trip through TapeGuard):
+DEX_FORK=1 forge test --match-contract DexForkTest --fork-url https://rpc.xlayer.tech -vv
 ```
 
-How to launch v2 on mainnet: **[`LAUNCH.md`](LAUNCH.md)**.
+How to launch v2 on mainnet: **[`LAUNCH.md`](LAUNCH.md)**. Hackathon submission pack and demo
+script: **[`SUBMISSION.md`](SUBMISSION.md)**.
 
 ## In plain words (what it is, and why you would want it)
 

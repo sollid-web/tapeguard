@@ -2,7 +2,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test server/*.test.js tapeout/*.test.mjs",
+    "test": "node --test server/*.test.js tapeout/*.test.mjs modules/*.test.mjs",
     "sync-config": "node scripts/sync-config.mjs",
     "gen-circuit": "node tapeout/generate.mjs"
   }

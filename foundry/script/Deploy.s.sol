@@ -24,7 +24,7 @@ contract DeployAgentContainer is Script {
         address owner = vm.envOr("OWNER_ADDRESS", vm.addr(deployerPrivateKey));
         vm.startBroadcast(deployerPrivateKey);
 
-        AgentContainer container = new AgentContainer(owner);
+        AgentContainer container = new AgentContainer(owner, address(0), 0);
         console.log("AgentContainer deployed at:", address(container));
 
         vm.stopBroadcast();

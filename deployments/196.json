@@ -10,5 +10,13 @@
     "circuitId": null,
     "container": null
   },
-  "note": "Addresses above are the v1 contracts the live Worker reports. Replace them with the output of script/LaunchTapeGuard.s.sol after the v2 launch, then run: node scripts/sync-config.mjs"
+  "note": "Addresses above are the v1 contracts the live Worker reports. Replace them with the output of script/LaunchTapeGuard.s.sol after the v2 launch, then run: node scripts/sync-config.mjs",
+  "dex": {
+    "router": "0x182a927119D56008d921126764bF884221b10f59",
+    "factory": "0xDf38F24fE153761634Be942F9d859f3DBA857E95",
+    "wrappedNative": "0xe538905cf8410324e03A5A23C1c177a474D59b2b",
+    "usdt": "0x1E4a5963aBFD975d8c9021ce480b42188849D41d",
+    "usdt0": "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+    "source": "Uniswap V2 X Layer deployment (developers.uniswap.org); WOKB from Uniswap v3 X Layer page; USDT/USDT0 from BitGo/OKX. Pick USDT vs USDT0 with test/DexFork.t.sol (deeper pool wins)."
+  }
 }

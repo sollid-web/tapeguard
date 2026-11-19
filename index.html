@@ -501,6 +501,16 @@ window.APP_CONFIG = {
               "name": "owner_",
               "type": "address",
               "internalType": "address"
+            },
+            {
+              "name": "treasury_",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "protocolFeeBps_",
+              "type": "uint16",
+              "internalType": "uint16"
             }
           ],
           "stateMutability": "nonpayable"
@@ -518,6 +528,19 @@ window.APP_CONFIG = {
               "name": "",
               "type": "uint256",
               "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "MAX_PROTOCOL_FEE_BPS",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint16",
+              "internalType": "uint16"
             }
           ],
           "stateMutability": "view"
@@ -637,6 +660,34 @@ window.APP_CONFIG = {
           "outputs": [
             {
               "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "feeTerms",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "treasury_",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "protocolFeeBps_",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "activationFee_",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "protocolFeesPaid_",
               "type": "uint256",
               "internalType": "uint256"
             }
@@ -784,6 +835,51 @@ window.APP_CONFIG = {
         },
         {
           "type": "function",
+          "name": "protocolFeeBps",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint16",
+              "internalType": "uint16"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "protocolFeeOf",
+          "inputs": [
+            {
+              "name": "value",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "protocolFeesPaid",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
           "name": "relayers",
           "inputs": [
             {
@@ -904,6 +1000,19 @@ window.APP_CONFIG = {
           ],
           "outputs": [],
           "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "treasury",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "view"
         },
         {
           "type": "function",
@@ -1174,6 +1283,31 @@ window.APP_CONFIG = {
         },
         {
           "type": "event",
+          "name": "ProtocolFeePaid",
+          "inputs": [
+            {
+              "name": "treasury",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "nonce",
+              "type": "uint256",
+              "indexed": true,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
           "name": "RelayerSet",
           "inputs": [
             {
@@ -1242,6 +1376,11 @@ window.APP_CONFIG = {
         },
         {
           "type": "error",
+          "name": "BadFeeTerms",
+          "inputs": []
+        },
+        {
+          "type": "error",
           "name": "ExecutionFailed",
           "inputs": [
             {
@@ -1250,6 +1389,11 @@ window.APP_CONFIG = {
               "internalType": "bytes"
             }
           ]
+        },
+        {
+          "type": "error",
+          "name": "FeeTermsLocked",
+          "inputs": []
         },
         {
           "type": "error",
@@ -3273,6 +3417,13 @@ window.APP_CONFIG = {
   </div>
   <div class="grid g2">
     <div class="card">
+      <div class="card-h"><h3>TapeOut guard circuit</h3><span class="chip ok">final verdict</span></div>
+      <div class="dim" style="margin:0 0 8px">Every action is reduced to 10 fact bits. Solidity enforces the safety
+        floor; this circuit, taped out on TapeOut, gives the final verdict through <code>eval()</code>.
+        A TapeOut outage can only make it refuse, never approve.</div>
+      <div id="pol-tapeout"></div>
+    </div>
+    <div class="card">
       <div class="card-h"><h3>Circuit identity</h3><span class="chip" id="pol-mode"></span></div>
       <div id="pol-identity"></div>
       <div class="row mt">
@@ -3441,18 +3592,20 @@ window.APP_CONFIG = {
 
 <!-- ============ REVENUE ============ -->
 <section class="view" id="v-revenue">
-  <h2 class="sec">Commercial path — usage fees and revenue that flows to the container</h2>
+  <h2 class="sec">Business model — a 30-day subscription plus a capped fee on executed volume, paid to the TapeGuard treasury on chain</h2>
   <div class="grid g3" id="rv-stats"></div>
   <div class="grid g2">
     <div class="card">
       <div class="card-h"><h3>Activation</h3><span class="chip" id="rv-active"></span></div>
       <div id="rv-activate"></div>
-      <h4>Performance fee on executed volume</h4>
+      <div id="rv-bps-edit">
+      <h4>Volume fee (demo mode)</h4>
       <div class="grid g2" style="margin:0 0 8px">
-        <div><label class="f">Fee (basis points of volume)</label><input id="rv-bps" value="20"></div>
-        <div><label class="f">→ credited to</label><input value="circuit container" disabled></div>
+        <div><label class="f">Fee (basis points of volume)</label><input id="rv-bps" value="10"></div>
+        <div><label class="f">→ paid to</label><input value="TapeGuard treasury" disabled></div>
       </div>
       <button class="btn primary sm" id="btn-save-bps">Update fee</button>
+      </div>
     </div>
     <div class="card">
       <div class="card-h"><h3>Fee ledger</h3><span class="chip" id="rv-ledger-total"></span></div>

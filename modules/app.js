@@ -115,14 +115,64 @@ function ensureChain(){
       });
   });
 }
+/* ---- TapeOut container routing --------------------------------------------
+   The agent can be owned by its guard circuit's TapeOut container (the circuit
+   NFT's ERC-6551 account). Then owner actions must be sent as
+   container.execute(target, value, data, 0) by the wallet that controls the
+   container, paying TapeOut's EXEC_FEE (the container refunds any excess).
+   sendTx does this automatically: it reads the target's owner(), and if that
+   owner is a contract whose own owner() is the connected wallet, it wraps the
+   call. Everything else is sent directly, exactly as before. */
+var OWNER_ITEM = { name:'owner', inputs:[], outputs:[{ type:'address' }] };
+var EXEC_FEE_ITEM = { name:'EXEC_FEE', inputs:[], outputs:[{ type:'uint256' }] };
+var CONTAINER_EXECUTE_ITEM = { name:'execute',
+  inputs:[{ type:'address' }, { type:'uint256' }, { type:'bytes' }, { type:'uint8' }], outputs:[{ type:'bytes' }] };
+var EXEC_FEE_FALLBACK = 2000000000000000n; // 0.002 OKB (TapeOut charges 0.0013 and refunds the rest)
+var ROUTES = {};
+var OPEN_FUNCTIONS = ['activate'];
+function ownerRoute(addr){
+  var me = String(S.wallet.address||'').toLowerCase();
+  var key = String(addr).toLowerCase()+'|'+me;
+  if(ROUTES[key]) return Promise.resolve(ROUTES[key]);
+  var direct = { via:null };
+  return callView(addr, OWNER_ITEM, []).then(function(out){
+    var owner = String(out[0]||'').toLowerCase();
+    if(!owner || owner === me) return direct;
+    return chainRpc('eth_getCode', [owner, 'latest']).then(function(code){
+      if(!code || code === '0x') return direct;
+      return callView(owner, OWNER_ITEM, []).then(function(o2){
+        return String(o2[0]||'').toLowerCase() === me ? { via: owner } : direct;
+      });
+    });
+  }).catch(function(){ return direct; }).then(function(route){ ROUTES[key] = route; return route; });
+}
+function execFee(container){
+  return callView(container, EXEC_FEE_ITEM, []).then(function(out){
+    var fee = BigInt(out[0]||0); return fee > 0n ? fee : EXEC_FEE_FALLBACK;
+  }).catch(function(){ return EXEC_FEE_FALLBACK; });
+}
+/* For the UI: "direct" or "via TapeOut container 0x…". */
+function ownerRouteLabel(addr){
+  return ownerRoute(addr).then(function(r){ return r.via ? 'via TapeOut container '+r.via.slice(0,6)+'…'+r.via.slice(-4) : 'direct'; });
+}
 function sendTx(addr, item, args, valueWei){
   var wp = activeProvider();
   if(!wp || !S.wallet.address) return Promise.reject(new Error('Connect a wallet first.'));
   var enc = encodeCall(item, args||[]);
-  var value = '0x0';
-  try{ if(valueWei && BigInt(valueWei) > 0n) value = '0x' + BigInt(valueWei).toString(16); }catch(e){ value = '0x0'; }
-  return ensureChain().then(function(){
-    return wp.request({ method:'eth_sendTransaction', params:[{ from:S.wallet.address, to:addr, data: enc.data, value: value }] });
+  var inner = 0n;
+  try{ if(valueWei && BigInt(valueWei) > 0n) inner = BigInt(valueWei); }catch(e){ inner = 0n; }
+  var hex = function(n){ return '0x' + n.toString(16); };
+  // Functions anyone may call never need the container (and its fee).
+  var open = OPEN_FUNCTIONS.indexOf(item.name) >= 0;
+  return ensureChain().then(function(){ return open ? { via:null } : ownerRoute(addr); }).then(function(route){
+    if(!route.via){
+      return wp.request({ method:'eth_sendTransaction', params:[{ from:S.wallet.address, to:addr, data: enc.data, value: hex(inner) }] });
+    }
+    return execFee(route.via).then(function(fee){
+      var wrapped = encodeCall(CONTAINER_EXECUTE_ITEM, [addr, inner.toString(), enc.data, 0]);
+      toast('Routing through your TapeOut container (fee '+(Number(fee)/1e18).toFixed(4)+' OKB, excess refunded)', 'info');
+      return wp.request({ method:'eth_sendTransaction', params:[{ from:S.wallet.address, to:route.via, data: wrapped.data, value: hex(inner + fee) }] });
+    });
   });
 }
 /* Plain native transfer (no calldata): used to fund the container. */
@@ -297,7 +347,9 @@ function drawChart(){
 /* =========================================================================
    8. Policy view
    ========================================================================= */
+var CIRCUIT_PANEL_DONE = false;
 function renderPolicy(){
+  if(!CIRCUIT_PANEL_DONE){ CIRCUIT_PANEL_DONE = true; renderCircuitPanel(); }
   var id = $('#pol-identity'); if(!id) return;
   id.textContent='';
   var pc = primaryContract();
@@ -582,7 +634,7 @@ function renderOverviewStatsOnly(){
     if(ct.children[1]) ct.children[1].querySelector('.v').textContent = fmtUnits(S.balance.USDT,2)+' USDT';
   }
   var rc = $('#rv-stats');
-  if(rc && rc.children.length){ rc.children[0].querySelector('.v').textContent = fmtUnits(feeTotal(S.fees.ledger, S.fees.activation, S.fees.paid),4)+' USDT'; }
+  if(!LIVE && rc && rc.children.length){ rc.children[0].querySelector('.v').textContent = fmtUnits(feeTotal(S.fees.ledger, S.fees.activation, S.fees.paid),4)+' USDT'; }
   var mc = $('#chip-mode');
   if(mc){ mc.textContent = (S.daemon.running?'● daemon live · ':'')+(LIVE?'LIVE CONTRACTS':'DEMO SIMULATION'); mc.className = 'chip '+(LIVE?'live':'warn'); }
 }
@@ -659,7 +711,121 @@ function renderContainer(){
 /* =========================================================================
    11. Revenue view
    ========================================================================= */
+/* ---- TapeOut guard circuit panel (Policy tab) -------------------------------
+   Runs the live circuit's eval() through PolicyCircuit.evalCircuit on three fact
+   vectors, so anyone can watch the taped-out circuit decide. Fact bits, LSB first:
+   0 not paused · 1 agent authorised · 2 target allowed · 3 function allowed ·
+   4 recipient safe · 5 within per-action · 6 within daily · 7 within action count ·
+   8 large action · 9 half the daily budget used */
+var CIRCUIT_SCENARIOS = [
+  { name:'Normal rebalance', bits:0x0ff, note:'all safety facts hold' },
+  { name:'Large trade after half the budget is spent', bits:0x3ff, note:'rule that exists only in the circuit' },
+  { name:'Keeper tries to take the swap output', bits:0x0ef, note:'recipient is not the agent (bit 4 off)' }
+];
+function factChips(bits){
+  var names = ['not paused','agent ok','target ok','function ok','recipient safe','≤ per-action','≤ daily','≤ count','large','half used'];
+  return names.map(function(n,i){ return ((bits>>i)&1 ? '■ ' : '□ ')+n; }).join('  ');
+}
+function renderCircuitPanel(){
+  var box = $('#pol-tapeout'); if(!box) return;
+  box.textContent='';
+  if(!LIVE){ box.appendChild(mk('div','dim','Connect live contracts to evaluate the TapeOut guard circuit.')); return; }
+  var circ = liveFn('PolicyCircuit','tapeoutCircuits'), id = liveFn('PolicyCircuit','tapeoutCircuitId'), ev = liveFn('PolicyCircuit','evalCircuit');
+  if(!circ || !ev){ box.appendChild(mk('div','dim','This PolicyCircuit predates v2: no TapeOut circuit is linked yet.')); return; }
+  Promise.all([callView(circ.address, circ.item, []), callView(id.address, id.item, [])]).then(function(r){
+    var processor = String(r[0][0]||''), circuitId = String(r[1][0]||'0');
+    if(/^0x0{40}$/i.test(processor)){ box.appendChild(mk('div','dim','No TapeOut circuit linked (setTapeOutCircuit not called yet).')); return; }
+    kvRow(box, 'TapeOut processor', short(processor));
+    kvRow(box, 'Guard circuit id', circuitId);
+    kvRow(box, 'Circuit', '17 NAND gates · APPROVE = facts 0–7 AND NOT(large AND half used)');
+    var a = mk('a',null,'processor on the explorer'); a.href = explorerAddr(processor); a.target='_blank'; a.rel='noopener';
+    box.appendChild(a);
+    var b = mk('button','btn primary sm','Run the live circuit on 3 scenarios');
+    b.style.display='block'; b.style.marginTop='10px';
+    var out = mk('div','mt');
+    b.onclick = function(){
+      out.textContent='evaluating on X Layer…';
+      Promise.all(CIRCUIT_SCENARIOS.map(function(sc){ return callView(ev.address, ev.item, [sc.bits]); })).then(function(res){
+        out.textContent='';
+        res.forEach(function(v, i){
+          var sc = CIRCUIT_SCENARIOS[i], ok = v[0] === true || v[0] === 'true', approves = v[1] === true || v[1] === 'true';
+          var card = mk('div','notice '+(!ok ? 'warn' : approves ? 'ok' : 'bad'));
+          card.style.margin='8px 0';
+          card.appendChild(mk('b',null, sc.name+' → '+(!ok ? 'CIRCUIT UNAVAILABLE' : approves ? 'APPROVED' : 'REJECTED')));
+          card.appendChild(mk('div','dim', sc.note));
+          card.appendChild(mk('div','mono', factChips(sc.bits)));
+          out.appendChild(card);
+        });
+      }).catch(function(e){ out.textContent = 'eval failed: '+(e && e.message || e); });
+    };
+    box.appendChild(b); box.appendChild(out);
+  }).catch(function(e){ box.appendChild(mk('div','dim','Could not read the policy: '+(e && e.message || e))); });
+}
+
+/* ---- live contract helpers ------------------------------------------------ */
+function liveFn(name, fn){
+  var c = CONTRACTS[name];
+  if(!c || !c.address) return null;
+  var item = (c.abi||[]).filter(function(i){ return i && i.type==='function' && i.name===fn; })[0];
+  return item ? { address:c.address, item:item } : null;
+}
+function kvRow(box, k, v){
+  var row = mk('div','kv'); row.appendChild(mk('span',null,k)); row.appendChild(mk('span',null,v)); box.appendChild(row);
+}
+function explorerAddr(a){ return 'https://www.okx.com/web3/explorer/xlayer/address/'+a; }
+
+/* Live mode: the Revenue tab shows the AgentContainer's on-chain fee terms
+   (fixed at deployment) and pays activation with a real transaction. */
+function renderRevenueLive(){
+  var h = $('#rv-stats'); if(!h) return;
+  var edit = $('#rv-bps-edit'); if(edit) edit.style.display = 'none';
+  var terms = liveFn('AgentContainer','feeTerms'), until = liveFn('AgentContainer','activeUntil'),
+      activate = liveFn('AgentContainer','activate');
+  var box = $('#rv-activate'), act = $('#rv-active'), led = $('#rv-ledger');
+  if(!terms){
+    h.textContent=''; h.appendChild(statCard('Fee terms','—','this AgentContainer predates v2 (no feeTerms)'));
+    return;
+  }
+  Promise.all([callView(terms.address, terms.item, []), until ? callView(until.address, until.item, []) : Promise.resolve([0])])
+  .then(function(r){
+    var treasury = String(r[0][0]||''), bps = Number(r[0][1]||0), fee = BigInt(r[0][2]||0), paid = BigInt(r[0][3]||0);
+    var activeUntil = Number(r[1][0]||0), active = activeUntil*1000 > Date.now();
+    var hosted = treasury && !/^0x0{40}$/i.test(treasury);
+    S.fees.bps = bps; S.fees.liveActivation = fee.toString();
+    h.textContent='';
+    h.appendChild(statCard('Protocol fees paid', fmtUnits(paid,5)+' '+CHAIN.sym, hosted ? 'to the TapeGuard treasury, on chain' : 'self-hosted agent: no protocol fee'));
+    h.appendChild(statCard('Volume fee', (bps/100).toFixed(2)+'%', 'of every executed '+CHAIN.sym+' amount · capped at 0.50% in the contract'));
+    h.appendChild(statCard('Subscription', fmtUnits(fee,4)+' '+CHAIN.sym, 'per 30 days of autonomous operation'));
+    act.textContent = active ? 'ACTIVE' : 'INACTIVE'; act.className = 'chip '+(active?'ok':'warn');
+    box.textContent='';
+    kvRow(box, 'Treasury', hosted ? short(treasury) : 'none (self-hosted)');
+    kvRow(box, 'Active until', activeUntil ? new Date(activeUntil*1000).toISOString().slice(0,16).replace('T',' ')+' UTC' : 'never activated');
+    kvRow(box, 'Terms', hosted ? 'fixed at deployment (owner cannot change them)' : 'owner-set');
+    if(activate){
+      var b = mk('button','btn primary sm','Pay '+fmtUnits(fee,4)+' '+CHAIN.sym+' and activate 30 days');
+      b.style.marginTop='10px';
+      b.onclick = function(){
+        sendTx(activate.address, activate.item, [], fee.toString()).then(function(hash){
+          toast('Activation sent: '+short(String(hash))); log('FEE','Activation sent on chain', String(hash)); renderFeed();
+        }).catch(function(e){ toast('Activation failed: '+(e && e.message || e)); });
+      };
+      box.appendChild(b);
+    }
+    led.textContent='';
+    var tr = mk('tr'), td = mk('td','dim');
+    td.appendChild(document.createTextNode('Every fee is a ProtocolFeePaid event on the container: '));
+    var a = mk('a',null,'view on the explorer'); a.href = explorerAddr(terms.address); a.target='_blank'; a.rel='noopener';
+    td.appendChild(a); tr.appendChild(td); led.appendChild(tr);
+    $('#rv-ledger-total').textContent = fmtUnits(paid,5)+' '+CHAIN.sym;
+    if(S.market.live && $('#rv-px')) $('#rv-px').value = S.market.price.toFixed(2);
+    renderProjection();
+  }).catch(function(e){
+    h.textContent=''; h.appendChild(statCard('Fee terms','—','could not read the container: '+(e && e.message || e)));
+  });
+}
+
 function renderRevenue(){
+  if(LIVE) return renderRevenueLive();
   var h = $('#rv-stats'); if(!h) return;
   h.textContent='';
   var total = feeTotal(S.fees.ledger, S.fees.activation, S.fees.paid);
@@ -711,9 +877,9 @@ function renderProjection(){
   var feeOkb = monthlyVol * (S.fees.bps/10000);
   var monthly = feeOkb * px;
   [['Executed volume / month', fmtNum(monthlyVol,2)+' OKB'],
-   ['Performance fees / month', fmtNum(feeOkb,2)+' OKB'],
+   ['Volume fees / month', fmtNum(feeOkb,4)+' OKB'],
    ['Protocol revenue / month', '$'+fmtNum(monthly,2)],
-   ['Plus activation fees', '$'+fmtNum(execs>0?5:0,2)+' per activated agent']].forEach(function(r){
+   ['Plus subscriptions', '$'+fmtNum(Number(S.fees.liveActivation ? fmtUnits(S.fees.liveActivation,6) : 0.02)*px,2)+' per agent / 30 days']].forEach(function(r){
     var row = mk('div','kv'); row.appendChild(mk('span',null,r[0])); row.appendChild(mk('span',null,r[1])); out.appendChild(row);
   });
 }

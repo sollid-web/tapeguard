@@ -33,6 +33,8 @@ interface IPolicyCircuit {
 contract AgentContainer {
     // ----------------------------------------------------------- custom errors
     error NotOwner();
+    error BadFeeTerms();
+    error FeeTermsLocked();
     error NotAuthorised();
     error ZeroAddress();
     error NotAContract();
@@ -56,6 +58,7 @@ contract AgentContainer {
     event PausedSet(bool paused);
     event ActivationFeeSet(uint256 amount);
     event Activated(address indexed payer, uint256 amount, uint256 activeUntil);
+    event ProtocolFeePaid(address indexed treasury, uint256 amount, uint256 indexed nonce);
     event PolicyChecked(address indexed target, uint256 value, bytes4 selector, string reason);
     event Executed(uint256 indexed nonce, address indexed target, uint256 value, bytes4 selector, bytes result);
     event FeesWithdrawn(address indexed to, uint256 amount);
@@ -84,12 +87,21 @@ contract AgentContainer {
     address public policy;
     bool public paused;
 
-    /// Service fee that unlocks 30 days of daemon operation. Fees are collected
-    /// inside the container and swept to the owner with {withdrawFees}.
+    /// Service fee that unlocks 30 days of daemon operation. Self-hosted
+    /// (treasury == 0): collected inside the container, swept with {withdrawFees}.
+    /// Hosted (treasury != 0): paid straight to the TapeGuard treasury.
     uint256 public activationFee;
     uint256 public constant ACTIVATION_PERIOD = 30 days;
     uint256 public activeUntil;
     uint256 public accruedFees;
+
+    /// TapeGuard protocol treasury and volume fee, fixed at deployment. These are
+    /// the terms the owner signed up for: neither the owner nor a relayer can change
+    /// them, and the fee is hard-capped at MAX_PROTOCOL_FEE_BPS of executed volume.
+    address public immutable treasury;
+    uint16 public immutable protocolFeeBps;
+    uint16 public constant MAX_PROTOCOL_FEE_BPS = 50; // 0.5%
+    uint256 public protocolFeesPaid;
 
     uint256 public executions;
     uint256 public nonce;
@@ -120,9 +132,16 @@ contract AgentContainer {
 
     // ------------------------------------------------------------ constructor
     /// @param owner_ the user's TapeOut circuit container that controls this agent.
-    constructor(address owner_) {
+    /// @param treasury_ TapeGuard treasury, or address(0) for a self-hosted agent
+    /// @param protocolFeeBps_ fee on executed native volume (0 when self-hosted)
+    constructor(address owner_, address treasury_, uint16 protocolFeeBps_) {
         if (owner_ == address(0)) revert ZeroAddress();
+        if (protocolFeeBps_ > MAX_PROTOCOL_FEE_BPS || (treasury_ == address(0) && protocolFeeBps_ != 0)) {
+            revert BadFeeTerms();
+        }
         owner = owner_;
+        treasury = treasury_;
+        protocolFeeBps = protocolFeeBps_;
         // 0.02 native token (OKB on X Layer) per 30 day activation period.
         activationFee = 0.02 ether;
         paused = false;
@@ -158,27 +177,18 @@ contract AgentContainer {
         address policyContract = policy;
         if (policyContract == address(0)) revert PolicyNotSet();
 
-        // Native funds: the fee revenue stays reserved for withdrawFees().
-        if (value > 0 && value > _available()) revert InsufficientBalance();
+        // Native funds: the fee revenue stays reserved for withdrawFees(), and the
+        // protocol fee on this action must be covered too.
+        uint256 protocolFee = protocolFeeOf(value);
+        if (value + protocolFee > 0 && value + protocolFee > _available()) revert InsufficientBalance();
 
-        _validateTokenCalldata(data);
-        (address token, uint256 tokenAmount) = _tokenOutflow(target, data);
-        if (_isApproval(data)) {
-            address router = address(uint160(_word(data, 4)));
-            if (!IPolicyCircuit(policyContract).authorizedRouters(router)) revert RouterNotAuthorised();
-        }
-        if (tokenAmount > 0) {
-            (bool tokenOk, string memory tokenReason) =
-                IPolicyCircuit(policyContract).checkToken(address(this), token, tokenAmount);
-            if (!tokenOk) revert PolicyRejected(tokenReason);
-        }
+        (address token, uint256 tokenAmount) = _checkTokenSide(policyContract, target, data);
 
         // Zero-address check: a call to address(0) would silently succeed on most
         // EVM implementations but serve no legitimate purpose for a trading agent.
         if (target == address(0)) revert ZeroAddress();
 
-        (bool approved, string memory reason) = IPolicyCircuit(policyContract).check(address(this), target, value, data);
-        if (!approved) revert PolicyRejected(reason);
+        string memory reason = _requireApproval(policyContract, target, value, data);
 
         // Checks-Effects-Interactions: update all state before any external call so
         // that cross-function reentrancy (via info() or the public nonce getter)
@@ -189,6 +199,7 @@ contract AgentContainer {
         nonce = execNonce;
         executions += 1;
         lastExecutionAt = block.timestamp;
+        if (protocolFee > 0) protocolFeesPaid += protocolFee;
 
         emit PolicyChecked(target, value, _selector(data), reason);
 
@@ -201,7 +212,40 @@ contract AgentContainer {
         if (!ok) revert ExecutionFailed(returndata);
 
         emit Executed(execNonce, target, value, _selector(data), returndata);
+        if (protocolFee > 0) {
+            emit ProtocolFeePaid(treasury, protocolFee, execNonce);
+            _send(treasury, protocolFee);
+        }
         return returndata;
+    }
+
+    function _requireApproval(address policyContract, address target, uint256 value, bytes calldata data)
+        private
+        view
+        returns (string memory reason)
+    {
+        bool approved;
+        (approved, reason) = IPolicyCircuit(policyContract).check(address(this), target, value, data);
+        if (!approved) revert PolicyRejected(reason);
+    }
+
+    /// ERC-20 side of an action: calldata shape, router-only approvals, token caps.
+    function _checkTokenSide(address policyContract, address target, bytes calldata data)
+        private
+        view
+        returns (address token, uint256 tokenAmount)
+    {
+        _validateTokenCalldata(data);
+        (token, tokenAmount) = _tokenOutflow(target, data);
+        if (_isApproval(data)) {
+            address router = address(uint160(_word(data, 4)));
+            if (!IPolicyCircuit(policyContract).authorizedRouters(router)) revert RouterNotAuthorised();
+        }
+        if (tokenAmount > 0) {
+            (bool tokenOk, string memory tokenReason) =
+                IPolicyCircuit(policyContract).checkToken(address(this), token, tokenAmount);
+            if (!tokenOk) revert PolicyRejected(tokenReason);
+        }
     }
 
     /// @notice Dry-run of exactly the check {execute} performs. Anyone can call it,
@@ -275,6 +319,8 @@ contract AgentContainer {
     }
 
     function setActivationFee(uint256 fee) external onlyOwner {
+        // Hosted agents: the subscription price is part of the fixed terms.
+        if (treasury != address(0)) revert FeeTermsLocked();
         activationFee = fee;
         emit ActivationFeeSet(fee);
     }
@@ -286,11 +332,32 @@ contract AgentContainer {
         uint256 required = activationFee;
         if (msg.value < required) revert FeeTooLow(required, msg.value);
 
-        accruedFees += msg.value;
         uint256 base = activeUntil > block.timestamp ? activeUntil : block.timestamp;
         activeUntil = base + ACTIVATION_PERIOD;
 
         emit Activated(msg.sender, msg.value, activeUntil);
+        if (treasury == address(0)) {
+            accruedFees += msg.value;
+        } else {
+            protocolFeesPaid += msg.value;
+            emit ProtocolFeePaid(treasury, msg.value, 0);
+            _send(treasury, msg.value);
+        }
+    }
+
+    /// @notice The protocol fee {execute} charges on an action moving `value`.
+    function protocolFeeOf(uint256 value) public view returns (uint256) {
+        if (treasury == address(0) || value == 0) return 0;
+        return value * protocolFeeBps / 10_000;
+    }
+
+    /// @notice The commercial terms of this agent, in one call.
+    function feeTerms()
+        external
+        view
+        returns (address treasury_, uint16 protocolFeeBps_, uint256 activationFee_, uint256 protocolFeesPaid_)
+    {
+        return (treasury, protocolFeeBps, activationFee, protocolFeesPaid);
     }
 
     /// @notice Sweeps collected service fees to the owner (the TapeOut container).

@@ -24,16 +24,37 @@ With it: about **0.11 OKB**.
 - **Deployer wallet** with the OKB above. Put its key in `foundry/.env` as `PRIVATE_KEY=0x...`
   (git-ignored, and never served by the Worker; see `.assetsignore`).
 - **Relayer wallet**: a fresh key used only by the signer Worker. Fund it with ~0.01 OKB for gas.
-- DEX router and USDT on X Layer: the daemon speaks the UniswapV2 router ABI
-  (`swapExactETHForTokens` / `swapExactTokensForETH`). Verify both addresses on OKLink before use.
+- Trading venue (UniswapV2 ABI, which the daemon speaks): Uniswap V2 on X Layer.
+
+  | | address |
+  |---|---|
+  | Router02 | `0x182a927119D56008d921126764bF884221b10f59` |
+  | Factory | `0xDf38F24fE153761634Be942F9d859f3DBA857E95` |
+  | WOKB | `0xe538905cf8410324e03A5A23c1c177a474D59b2b` |
+  | USDT / USDT0 | `0x1E4a5963aBFD975d8c9021ce480b42188849D41d` / `0x779Ded0c9e1022225f8E0630b35a9b54bE713736` |
+
+  **Before anything else, prove the venue on real liquidity** (free, read-only fork):
+
+  ```sh
+  cd foundry
+  DEX_FORK=1 forge test --match-contract DexForkTest --fork-url https://rpc.xlayer.tech -vv
+  ```
+
+  It prints both pools' depth and runs a full OKB → USDT → OKB round trip through PolicyCircuit
+  and the guard circuit. Use the USDT token it says it traded against. If it reports
+  "pool too thin", rerun with `ROUTER=<another UniswapV2-compatible router>` (e.g. PotatoSwap's,
+  which holds the deepest WOKB/USDT pool, `0xc71f9e1de80eb505c0cb3bbf90ae6593130e5d25`; take the
+  router address from a swap transaction on that pool in OKLink).
 
 ```sh
 cd foundry
 set -a; source .env; set +a      # PRIVATE_KEY for this shell (forge also reads .env itself)
 export RELAYER_ADDRESS=0x...        # relayer wallet address
-export ROUTER=0x...                 # UniswapV2-style router on X Layer (optional now, needed to trade)
-export USDT=0x...                   # USDT on X Layer (optional now, needed to trade)
+export ROUTER=0x182a927119D56008d921126764bF884221b10f59   # Uniswap V2 Router02
+export USDT=0x1E4a5963aBFD975d8c9021ce480b42188849D41d     # or USDT0, per DexForkTest
 export ACTIVATE=true FUND_WEI=200000000000000000   # 0.2 OKB for the agent to trade with
+export TREASURY=0x...               # a separate wallet you control: receives subscriptions + volume fees
+export DEPLOY_FACTORY=true          # also deploy TapeGuardFactory (one-click agents, same terms)
 ```
 
 ## 1. Rehearse on a fork (free)
@@ -56,8 +77,8 @@ Both fork tests must report real checks (`eval verified on fact vectors: 1024`),
 forge script script/LaunchTapeGuard.s.sol --rpc-url https://rpc.xlayer.tech --broadcast --slow
 ```
 
-It prints the processor (circuits) address, the guard circuit id, `PolicyCircuit`, `AgentContainer`
-and the policy commitment. Copy them into [`deployments/196.json`](deployments/196.json)
+It prints the processor (circuits) address, the guard circuit id, `PolicyCircuit`, `AgentContainer`,
+the treasury and fee, `TapeGuardFactory`, and the policy commitment. Copy them into [`deployments/196.json`](deployments/196.json)
 (`AgentContainer`, `PolicyCircuit`, `tapeout.circuits`, `tapeout.circuitId`), then:
 
 ```sh
@@ -90,8 +111,17 @@ npx wrangler secret put RELAYER_ADDRESS     # relayer wallet address
 npx wrangler deploy
 ```
 
-Then in the dashboard's Autonomy tab (admin login) set `container`, `policy`, `router`, `usdt`,
-`factory`, `wrappedNative`, `pathSell`, `pathBuy` to the new values.
+Then in the dashboard's Autonomy tab (admin login) set:
+
+| key | value |
+|---|---|
+| `container`, `policy` | from the launch output |
+| `router` | `0x182a927119D56008d921126764bF884221b10f59` |
+| `factory` | `0xDf38F24fE153761634Be942F9d859f3DBA857E95` |
+| `wrappedNative` | `0xe538905cf8410324e03A5A23C1c177a474D59b2b` |
+| `usdt` | the USDT token DexForkTest traded against |
+| `pathSell` | `["<wrappedNative>","<usdt>"]` |
+| `pathBuy` | `["<usdt>","<wrappedNative>"]` |
 
 ## 5. Check
 

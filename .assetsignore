@@ -22,3 +22,5 @@ package-lock.json
 .gitignore
 .assetsignore
 demo-recorder.js
+*.test.mjs
+*.test.js

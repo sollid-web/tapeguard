@@ -67,7 +67,7 @@ contract AgentContainerPhase3Test is Test {
 
     function setUp() public {
         vm.prank(owner);
-        agent = new AgentContainer(owner);
+        agent = new AgentContainer(owner, address(0), 0);
         policy = new MockPolicyPhase3();
         token = new MockTokenPhase3();
         vm.prank(owner);
